@@ -1,0 +1,50 @@
+.stub-page-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.stub-page-card {
+  max-width: 380px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.stub-page-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stub-page-title {
+  font: 700 16px system-ui, sans-serif;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.stub-page-desc {
+  font: 400 13px/1.6 system-ui, sans-serif;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.stub-page-badge {
+  font: 600 10px system-ui, sans-serif;
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary-border);
+  padding: 3px 9px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}

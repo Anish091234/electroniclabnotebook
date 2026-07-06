@@ -1,0 +1,162 @@
+.sidebar {
+  width: 216px;
+  background: var(--color-bg-sidebar);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.sidebar-brand {
+  padding: 16px 14px 12px;
+  border-bottom: 1px solid var(--color-border-light);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-brand-mark {
+  width: 28px;
+  height: 28px;
+  background: var(--color-primary);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sidebar-brand-name {
+  font: 700 14px/1 system-ui, sans-serif;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+}
+
+.sidebar-nav {
+  padding: 8px 7px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.sidebar-nav-item {
+  padding: 7px 9px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font: 500 12px system-ui, sans-serif;
+  color: var(--color-text-tertiary);
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.sidebar-nav-item.active {
+  background: var(--color-primary-light);
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.sidebar-nav-item-badge {
+  margin-left: auto;
+  background: var(--color-border-lighter);
+  color: var(--color-text-muted);
+  font: 600 9.5px system-ui, sans-serif;
+  padding: 1px 5px;
+  border-radius: 9px;
+}
+
+.sidebar-ai-card {
+  margin: 0 8px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent-purple));
+  border-radius: 7px;
+  padding: 9px 11px;
+  cursor: pointer;
+}
+
+.sidebar-ai-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.sidebar-ai-card-title {
+  font: 600 11px system-ui, sans-serif;
+  color: white;
+}
+
+.sidebar-ai-card-pill {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.22);
+  color: white;
+  font: 700 9px system-ui, sans-serif;
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+
+.sidebar-ai-card-body {
+  font: 400 10px system-ui, sans-serif;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sidebar-footer-spacer {
+  padding: 8px 0;
+}
+
+.sidebar-user {
+  padding: 9px 11px;
+  border-top: 1px solid var(--color-border-light);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 10px system-ui, sans-serif;
+  color: white;
+  flex-shrink: 0;
+}
+
+.sidebar-user-name {
+  font: 600 11px system-ui, sans-serif;
+  color: var(--color-text-primary);
+}
+
+.sidebar-user-dept {
+  font: 400 10px system-ui, sans-serif;
+  color: var(--color-text-faint);
+}
+
+.sidebar-logout {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--color-text-faint);
+  font: 500 10.5px system-ui, sans-serif;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.sidebar-logout:hover {
+  background: var(--color-border-lighter);
+  color: var(--color-text-tertiary);
+}

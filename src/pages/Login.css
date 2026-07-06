@@ -1,0 +1,114 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-app);
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.06);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.login-brand-mark {
+  width: 34px;
+  height: 34px;
+  background: var(--color-primary);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.login-brand-name {
+  font: 700 18px system-ui, sans-serif;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+}
+
+.login-heading {
+  text-align: center;
+}
+
+.login-heading h1 {
+  font: 700 18px system-ui, sans-serif;
+  color: var(--color-text-primary);
+  margin: 0 0 4px;
+}
+
+.login-heading p {
+  font: 400 12.5px system-ui, sans-serif;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-field label {
+  font: 500 11.5px system-ui, sans-serif;
+  color: var(--color-text-secondary);
+}
+
+.login-field input {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 9px 11px;
+  font: 400 13px system-ui, sans-serif;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.login-field input:focus {
+  border-color: var(--color-primary);
+}
+
+.login-error {
+  font: 400 12px system-ui, sans-serif;
+  color: var(--color-danger-text);
+  background: var(--color-danger-bg);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.login-submit {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px;
+  font: 600 13px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-hint {
+  text-align: center;
+  font: 400 11.5px system-ui, sans-serif;
+  color: var(--color-text-faint);
+}
