@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#d4d2cc;font-family:system-ui,-apple-system,sans-serif}
+a{color:inherit;text-decoration:none}
+.dv-turn{padding:52px 48px 48px;border-bottom:1px solid rgba(0,0,0,.1);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 32px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 14px/1.2 system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:52px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:500 12px/1.3 system-ui,sans-serif;color:rgba(0,0,0,.45)}
+.dv-card{max-width:100%;border-radius:12px;box-shadow:0 8px 48px rgba(0,0,0,.2),0 2px 8px rgba(0,0,0,.12);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}
+.dv-next{margin:36px 0 0;font:12px/1.7 system-ui,sans-serif;color:rgba(0,0,0,.38)}
+.slbl{font:500 9px ui-monospace,monospace;color:rgba(0,0,0,.28);text-transform:uppercase;letter-spacing:1.4px;padding:18px 0 6px}
+</style>
+</helmet>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Three visual directions — Web Dashboard &amp; Experiment Editor</span></div>
+<div class="dv-opts">
+
+<!-- ═══════════════════════ 1a: LABOS CLINICAL BLUE ═══════════════════════ -->
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a> "LabOS" · Clinical precision, blue, sidebar, dense tables</div>
+
+<div class="slbl">Dashboard</div>
+<div class="dv-card" style="width:1200px">
+  <div style="background:#272727;padding:9px 14px;display:flex;align-items:center;gap:11px">
+    <div style="display:flex;gap:5px"><div style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></div><div style="width:11px;height:11px;border-radius:50%;background:#febc2e"></div><div style="width:11px;height:11px;border-radius:50%;background:#28c840"></div></div>
+    <div style="flex:1;background:#3a3a3a;border-radius:5px;padding:3px 14px;font:400 11px system-ui;color:#999;text-align:center;max-width:300px;margin:0 auto">app.labos.io/dashboard</div>
+  </div>
+  <div style="display:flex;height:648px;background:#f3f4f6;overflow:hidden">
+    <div style="width:216px;background:#fff;border-right:1px solid #e5e7eb;display:flex;flex-direction:column;flex-shrink:0">
+      <div style="padding:16px 14px 12px;border-bottom:1px solid #f1f3f5;display:flex;align-items:center;gap:8px">
+        <div style="width:28px;height:28px;background:#1d4ed8;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="white"/><rect x="9" y="2" width="5" height="5" rx="1" fill="white" opacity=".6"/><rect x="2" y="9" width="5" height="5" rx="1" fill="white" opacity=".6"/><rect x="9" y="9" width="5" height="5" rx="1" fill="#93c5fd"/></svg></div>
+        <span style="font:700 14px/1 system-ui;color:#0f172a;letter-spacing:-.3px">LabOS</span>
+      </div>
+      <nav style="padding:8px 7px;flex:1;display:flex;flex-direction:column;gap:1px;overflow:hidden">
+        <div style="padding:7px 9px;background:#eff6ff;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="#1d4ed8"/><rect x="8" y="1" width="5" height="5" rx="1" fill="#1d4ed8"/><rect x="1" y="8" width="5" height="5" rx="1" fill="#1d4ed8"/><rect x="8" y="8" width="5" height="5" rx="1" fill="#93c5fd"/></svg><span style="font:600 12px system-ui;color:#1d4ed8">Dashboard</span></div>
+        <div style="padding:7px 9px;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="12" height="2" rx="1" fill="#94a3b8"/><rect x="1" y="6" width="12" height="2" rx="1" fill="#94a3b8"/><rect x="1" y="10" width="7" height="2" rx="1" fill="#94a3b8"/></svg><span style="font:500 12px system-ui;color:#475569">Experiments</span><span style="margin-left:auto;background:#f1f5f9;color:#64748b;font:600 9.5px system-ui;padding:1px 5px;border-radius:9px">24</span></div>
+        <div style="padding:7px 9px;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5L1.5 4.5v4c0 2.5 2 4.9 5.5 5.6C10.5 13.4 12.5 11 12.5 8.5v-4L7 1.5z" stroke="#94a3b8" stroke-width="1.3" fill="none"/></svg><span style="font:500 12px system-ui;color:#475569">Protocols</span></div>
+        <div style="padding:7px 9px;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="3" width="12" height="8" rx="1.5" stroke="#94a3b8" stroke-width="1.2" fill="none"/><path d="M3.5 7h7M3.5 9h4" stroke="#94a3b8" stroke-width="1.1" stroke-linecap="round"/></svg><span style="font:500 12px system-ui;color:#475569">Inventory</span></div>
+        <div style="padding:7px 9px;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 10h2v3H2zM5.5 7h2v6H5.5zM9 4h2v9H9zM12 1.5h.5v11.5H12z" fill="#94a3b8"/></svg><span style="font:500 12px system-ui;color:#475569">Analytics</span></div>
+        <div style="padding:7px 9px;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="4.5" r="2.5" stroke="#94a3b8" stroke-width="1.2" fill="none"/><path d="M2.5 12.5c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" fill="none"/></svg><span style="font:500 12px system-ui;color:#475569">Team</span></div>
+        <div style="padding:7px 9px;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#94a3b8" stroke-width="1.2" fill="none"/><path d="M7 4v3.5l2 2" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" fill="none"/></svg><span style="font:500 12px system-ui;color:#475569">Audit Log</span></div>
+      </nav>
+      <div style="padding:8px;border-top:1px solid #f1f3f5">
+        <div style="background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:7px;padding:9px 11px;cursor:pointer">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="2" fill="white"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11M2.5 2.5l1 1M8.5 8.5l1 1M2.5 9.5l1-1M8.5 3.5l1-1" stroke="white" stroke-width="1" stroke-linecap="round"/></svg><span style="font:600 11px system-ui;color:white">AI Assistant</span><span style="margin-left:auto;background:rgba(255,255,255,.22);color:white;font:700 9px system-ui;padding:1px 5px;border-radius:8px">3 new</span></div>
+          <p style="font:400 10px system-ui;color:rgba(255,255,255,.7);margin:0;line-height:1.4">Anomaly in EXP-0142</p>
+        </div>
+      </div>
+      <div style="padding:9px 11px;border-top:1px solid #f1f3f5;display:flex;align-items:center;gap:8px">
+        <div style="width:28px;height:28px;border-radius:50%;background:#1d4ed8;display:flex;align-items:center;justify-content:center;font:700 10px system-ui;color:white;flex-shrink:0">SC</div>
+        <div style="min-width:0"><div style="font:600 11px system-ui;color:#0f172a">Dr. S. Chen</div><div style="font:400 10px system-ui;color:#94a3b8">Immunology</div></div>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div style="background:white;border-bottom:1px solid #e5e7eb;padding:0 22px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <h1 style="font:600 16px system-ui;color:#0f172a;margin:0">My Experiments</h1>
+        <div style="display:flex;align-items:center;gap:9px">
+          <div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:5px 11px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="#94a3b8" stroke-width="1.2" fill="none"/><path d="M8 8l2.5 2.5" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round"/></svg><span style="font:400 12px system-ui;color:#94a3b8">Search experiments…</span></div>
+          <button style="background:#1d4ed8;color:white;border:none;border-radius:6px;padding:7px 13px;font:600 12px system-ui;cursor:pointer">+ New Experiment</button>
+        </div>
+      </div>
+      <div style="flex:1;padding:18px 22px;overflow:auto;display:flex;flex-direction:column;gap:15px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+          <div style="background:white;border-radius:7px;padding:13px 15px;border:1px solid #e5e7eb"><div style="font:500 9.5px system-ui;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Active</div><div style="font:700 24px system-ui;color:#0f172a;line-height:1">12</div><div style="font:400 10px system-ui;color:#22c55e;margin-top:3px">↑ 3 this week</div></div>
+          <div style="background:white;border-radius:7px;padding:13px 15px;border:1px solid #e5e7eb"><div style="font:500 9.5px system-ui;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Protocols Run</div><div style="font:700 24px system-ui;color:#0f172a;line-height:1">48</div><div style="font:400 10px system-ui;color:#94a3b8;margin-top:3px">This month</div></div>
+          <div style="background:white;border-radius:7px;padding:13px 15px;border:1px solid #e5e7eb"><div style="font:500 9.5px system-ui;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Collaborators</div><div style="font:700 24px system-ui;color:#0f172a;line-height:1">7</div><div style="font:400 10px system-ui;color:#94a3b8;margin-top:3px">3 projects</div></div>
+          <div style="background:#eff6ff;border-radius:7px;padding:13px 15px;border:1px solid #bfdbfe"><div style="font:500 9.5px system-ui;color:#1d4ed8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">AI Insights</div><div style="font:700 24px system-ui;color:#1d4ed8;line-height:1">3</div><div style="font:400 10px system-ui;color:#1d4ed8;margin-top:3px">New suggestions</div></div>
+        </div>
+        <div style="display:flex;border-bottom:2px solid #e5e7eb;gap:0">
+          <div style="padding:8px 14px;border-bottom:2px solid #1d4ed8;margin-bottom:-2px;font:600 12px system-ui;color:#1d4ed8">All (24)</div>
+          <div style="padding:8px 14px;font:500 12px system-ui;color:#64748b;cursor:pointer">Active (12)</div>
+          <div style="padding:8px 14px;font:500 12px system-ui;color:#64748b;cursor:pointer">Complete (8)</div>
+          <div style="padding:8px 14px;font:500 12px system-ui;color:#64748b;cursor:pointer">Draft (4)</div>
+        </div>
+        <div style="background:white;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;flex-shrink:0">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:#f8fafc"><th style="padding:8px 14px;text-align:left;font:600 9.5px system-ui;color:#64748b;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb">Experiment</th><th style="padding:8px 14px;text-align:left;font:600 9.5px system-ui;color:#64748b;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb">Project</th><th style="padding:8px 14px;text-align:left;font:600 9.5px system-ui;color:#64748b;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb">Status</th><th style="padding:8px 14px;text-align:left;font:600 9.5px system-ui;color:#64748b;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb">Modified</th><th style="padding:8px 14px;text-align:left;font:600 9.5px system-ui;color:#64748b;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb">Owner</th></tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:10px 14px"><div style="font:600 12px system-ui;color:#0f172a">CRISPR-Cas9 T-Cell Knockout</div><div style="font:400 10px ui-monospace,monospace;color:#94a3b8;margin-top:1px">EXP-2026-0142</div></td><td style="padding:10px 14px;font:400 12px system-ui;color:#334155">Immunotherapy</td><td style="padding:10px 14px"><span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font:600 10px system-ui">Active</span></td><td style="padding:10px 14px;font:400 11.5px system-ui;color:#64748b">2h ago</td><td style="padding:10px 14px;font:400 11.5px system-ui;color:#64748b">S. Chen</td></tr>
+              <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:10px 14px"><div style="font:600 12px system-ui;color:#0f172a">Flow Cytometry — CD4/CD8 Panel</div><div style="font:400 10px ui-monospace,monospace;color:#94a3b8;margin-top:1px">EXP-2026-0141</div></td><td style="padding:10px 14px;font:400 12px system-ui;color:#334155">Immunotherapy</td><td style="padding:10px 14px"><span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font:600 10px system-ui">Active</span></td><td style="padding:10px 14px;font:400 11.5px system-ui;color:#64748b">Yesterday</td><td style="padding:10px 14px;font:400 11.5px system-ui;color:#64748b">M. Patel</td></tr>
+              <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:10px 14px"><div style="font:600 12px system-ui;color:#0f172a">Western Blot — Protein Expression</div><div style="font:400 10px ui-monospace,monospace;color:#94a3b8;margin-top:1px">EXP-2026-0139</div></td><td style="padding:10px 14px;font:400 12px system-ui;color:#334155">Proteomics</td><td style="padding:10px 14px"><span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:10px;font:600 10px system-ui">Review</span></td><td style="padding:10px 14px;font:400 11.5px system-ui;color:#64748b">3 days ago</td><td style="padding:10px 14px;font:400 11.5px system-ui;color:#64748b">S. Chen</td></tr>
+              <tr><td style="padding:10px 14px"><div style="font:600 12px system-ui;color:#0f172a">Gel Electrophoresis — Batch 7</div><div style="font:400 10px ui-monospace,monospace;color:#94a3b8;margin-top:1px">EXP-2026-0138</div></td><td style="padding:10px 14px;font:400 12px system-ui;color:#334155">Genomics</td><td style="padding:10px 14px"><span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:10px;font:600 10px system-ui">Complete</span></td><td style="padding:10px 14px;font:400 11.5px system-ui;color:#64748b">1 week ago</td><td style="padding:10px 14px;font:400 11.5px system-ui;color:#64748b">J. Kim</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="background:linear-gradient(135deg,#eff6ff,#f5f3ff);border:1px solid #bfdbfe;border-radius:8px;padding:13px 15px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+          <div style="width:32px;height:32px;background:#1d4ed8;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="3" fill="white"/><path d="M7.5 2v1.5M7.5 11.5V13M2 7.5h1.5M11.5 7.5H13" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+          <div style="flex:1"><div style="font:600 12px system-ui;color:#1e1b4b;margin-bottom:2px">AI: Transfection efficiency ↓23% in EXP-2026-0142</div><div style="font:400 11px system-ui;color:#475569">Matches buffer prep anomaly from 2 prior runs. Compare Cas9:sgRNA ratio with EXP-2026-0131.</div></div>
+          <button style="background:#1d4ed8;color:white;border:none;border-radius:6px;padding:6px 12px;font:600 11px system-ui;cursor:pointer;flex-shrink:0">View Analysis →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="slbl">Experiment Editor</div>
+<div class="dv-card" style="width:1200px">
+  <div style="background:#272727;padding:9px 14px;display:flex;align-items:center;gap:11px">
+    <div style="display:flex;gap:5px"><div style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></div><div style="width:11px;height:11px;border-radius:50%;background:#febc2e"></div><div style="width:11px;height:11px;border-radius:50%;background:#28c840"></div></div>
+    <div style="flex:1;background:#3a3a3a;border-radius:5px;padding:3px 14px;font:400 11px system-ui;color:#999;text-align:center;max-width:360px;margin:0 auto">app.labos.io/experiments/EXP-2026-0142</div>
+  </div>
+  <div style="display:flex;height:648px;background:#f3f4f6;overflow:hidden">
+    <div style="width:216px;background:#fff;border-right:1px solid #e5e7eb;display:flex;flex-direction:column;flex-shrink:0">
+      <div style="padding:16px 14px 12px;border-bottom:1px solid #f1f3f5;display:flex;align-items:center;gap:8px">
+        <div style="width:28px;height:28px;background:#1d4ed8;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="white"/><rect x="9" y="2" width="5" height="5" rx="1" fill="white" opacity=".6"/><rect x="2" y="9" width="5" height="5" rx="1" fill="white" opacity=".6"/><rect x="9" y="9" width="5" height="5" rx="1" fill="#93c5fd"/></svg></div>
+        <span style="font:700 14px/1 system-ui;color:#0f172a;letter-spacing:-.3px">LabOS</span>
+      </div>
+      <nav style="padding:8px 7px;flex:1;display:flex;flex-direction:column;gap:1px">
+        <div style="padding:7px 9px;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="#cbd5e1"/><rect x="8" y="1" width="5" height="5" rx="1" fill="#cbd5e1"/><rect x="1" y="8" width="5" height="5" rx="1" fill="#cbd5e1"/><rect x="8" y="8" width="5" height="5" rx="1" fill="#e2e8f0"/></svg><span style="font:500 12px system-ui;color:#475569">Dashboard</span></div>
+        <div style="padding:7px 9px;background:#eff6ff;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="12" height="2" rx="1" fill="#1d4ed8"/><rect x="1" y="6" width="12" height="2" rx="1" fill="#1d4ed8"/><rect x="1" y="10" width="7" height="2" rx="1" fill="#1d4ed8"/></svg><span style="font:600 12px system-ui;color:#1d4ed8">Experiments</span></div>
+        <div style="padding:7px 9px;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5L1.5 4.5v4c0 2.5 2 4.9 5.5 5.6C10.5 13.4 12.5 11 12.5 8.5v-4L7 1.5z" stroke="#94a3b8" stroke-width="1.3" fill="none"/></svg><span style="font:500 12px system-ui;color:#475569">Protocols</span></div>
+        <div style="padding:7px 9px;border-radius:5px;display:flex;align-items:center;gap:8px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="3" width="12" height="8" rx="1.5" stroke="#94a3b8" stroke-width="1.2" fill="none"/><path d="M3.5 7h7M3.5 9h4" stroke="#94a3b8" stroke-width="1.1" stroke-linecap="round"/></svg><span style="font:500 12px system-ui;color:#475569">Inventory</span></div>
+      </nav>
+      <div style="padding:8px;border-top:1px solid #f1f3f5">
+        <div style="background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:7px;padding:9px 11px;cursor:pointer">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="2" fill="white"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11" stroke="white" stroke-width="1" stroke-linecap="round"/></svg><span style="font:600 11px system-ui;color:white">AI Assistant</span><span style="margin-left:auto;background:rgba(255,255,255,.22);color:white;font:700 9px system-ui;padding:1px 5px;border-radius:8px">active</span></div>
+          <p style="font:400 10px system-ui;color:rgba(255,255,255,.7);margin:0">Monitoring EXP-0142</p>
+        </div>
+      </div>
+      <div style="padding:9px 11px;border-top:1px solid #f1f3f5;display:flex;align-items:center;gap:8px">
+        <div style="width:28px;height:28px;border-radius:50%;background:#1d4ed8;display:flex;align-items:center;justify-content:center;font:700 10px system-ui;color:white;flex-shrink:0">SC</div>
+        <div><div style="font:600 11px system-ui;color:#0f172a">Dr. S. Chen</div><div style="font:400 10px system-ui;color:#94a3b8">Immunology</div></div>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div style="background:white;border-bottom:1px solid #e5e7eb;padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:5px;font:400 11px system-ui;color:#94a3b8"><span>Experiments</span><span>›</span><span>Immunotherapy</span><span>›</span><span style="color:#334155;font-weight:500">CRISPR-Cas9 T-Cell Knockout</span></div>
+        <div style="display:flex;align-items:center;gap:7px"><span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font:600 10px system-ui">Active</span><button style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:5px 10px;font:500 11.5px system-ui;color:#334155;cursor:pointer">Share</button><button style="background:#1d4ed8;color:white;border:none;border-radius:5px;padding:6px 12px;font:600 11.5px system-ui;cursor:pointer">Save</button></div>
+      </div>
+      <div style="flex:1;display:flex;overflow:hidden">
+        <div style="flex:1;padding:20px;overflow:auto;display:flex;flex-direction:column;gap:13px">
+          <input style="font:700 21px system-ui;color:#0f172a;border:none;background:transparent;outline:none;width:100%;border-bottom:2px solid #e5e7eb;padding-bottom:9px" value="CRISPR-Cas9 T-Cell Knockout" readonly="readonly"/>
+          <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center">
+            <div style="display:flex;align-items:center;gap:5px"><span style="font:500 9px system-ui;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px">Project</span><span style="font:500 11.5px system-ui;color:#334155;background:#f1f5f9;padding:2px 8px;border-radius:4px">Immunotherapy</span></div>
+            <div style="display:flex;align-items:center;gap:5px"><span style="font:500 9px system-ui;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px">Date</span><span style="font:500 11.5px system-ui;color:#334155;background:#f1f5f9;padding:2px 8px;border-radius:4px">Jul 6, 2026</span></div>
+            <div style="display:flex;align-items:center;gap:5px"><span style="font:500 9px system-ui;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px">ID</span><span style="font:500 10.5px ui-monospace,monospace;color:#334155;background:#f1f5f9;padding:2px 8px;border-radius:4px">EXP-2026-0142</span></div>
+            <span style="font:500 11px system-ui;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:4px">CRISPR</span>
+            <span style="font:500 11px system-ui;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:4px">T-cells</span>
+          </div>
+          <div style="background:white;border:1px solid #e5e7eb;border-radius:6px;padding:5px 9px;display:flex;align-items:center;gap:2px;flex-wrap:wrap">
+            <button style="background:#1d4ed8;color:white;border:none;border-radius:3px;padding:3px 7px;font:700 11.5px system-ui;cursor:pointer">B</button>
+            <button style="background:transparent;border:none;border-radius:3px;padding:3px 7px;font:400 11.5px system-ui;font-style:italic;color:#475569;cursor:pointer">I</button>
+            <button style="background:transparent;border:none;border-radius:3px;padding:3px 7px;font:400 11.5px system-ui;color:#475569;text-decoration:underline;cursor:pointer">U</button>
+            <div style="width:1px;height:13px;background:#e2e8f0;margin:0 3px"></div>
+            <button style="background:transparent;border:none;border-radius:3px;padding:3px 7px;font:600 11.5px system-ui;color:#475569;cursor:pointer">H1</button>
+            <button style="background:transparent;border:none;border-radius:3px;padding:3px 7px;font:600 11.5px system-ui;color:#475569;cursor:pointer">H2</button>
+            <div style="width:1px;height:13px;background:#e2e8f0;margin:0 3px"></div>
+            <button style="background:transparent;border:none;border-radius:3px;padding:3px 7px;font:500 11.5px system-ui;color:#475569;cursor:pointer">Table</button>
+            <button style="background:transparent;border:none;border-radius:3px;padding:3px 7px;font:500 11.5px system-ui;color:#475569;cursor:pointer">Image</button>
+            <button style="background:transparent;border:none;border-radius:3px;padding:3px 7px;font:500 11.5px system-ui;color:#475569;cursor:pointer">Protocol ▾</button>
+            <div style="width:1px;height:13px;background:#e2e8f0;margin:0 3px"></div>
+            <button style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:3px;padding:3px 9px;font:600 11px system-ui;color:#1d4ed8;cursor:pointer">✦ AI Draft</button>
+          </div>
+          <div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;flex:1;min-height:200px">
+            <h3 style="font:600 13px system-ui;color:#0f172a;margin:0 0 6px">Objective</h3>
+            <p style="font:400 12px/1.75 system-ui;color:#334155;margin:0 0 14px">Investigate PD-1 knockout effect on CD8+ T-cell cytotoxic activation. CRISPR-Cas9 targeting PDCD1 locus in primary human T cells from healthy donor PBMCs.</p>
+            <h3 style="font:600 13px system-ui;color:#0f172a;margin:0 0 9px">Protocol Steps</h3>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f0fdf4;border-radius:5px;border:1px solid #bbf7d0"><div style="width:15px;height:15px;border-radius:3px;background:#22c55e;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4l2 2 3-3.5" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span style="font:400 11.5px system-ui;color:#166534;text-decoration:line-through">PBMC isolation — Ficoll gradient</span><span style="margin-left:auto;font:400 9.5px system-ui;color:#86efac">S.C. 9:12 AM</span></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f0fdf4;border-radius:5px;border:1px solid #bbf7d0"><div style="width:15px;height:15px;border-radius:3px;background:#22c55e;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4l2 2 3-3.5" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span style="font:400 11.5px system-ui;color:#166534;text-decoration:line-through">CD8+ T cell enrichment — EasySep Kit</span><span style="margin-left:auto;font:400 9.5px system-ui;color:#86efac">M.P. 11:30 AM</span></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fffbeb;border-radius:5px;border:1px solid #fde68a"><div style="width:15px;height:15px;border-radius:3px;border:2px solid #f59e0b;flex-shrink:0"></div><span style="font:500 11.5px system-ui;color:#0f172a">RNP assembly — Cas9 protein + PD-1 sgRNA</span><span style="margin-left:auto;font:600 9.5px system-ui;color:#d97706">In progress</span></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0"><div style="width:15px;height:15px;border-radius:3px;border:2px solid #cbd5e1;flex-shrink:0"></div><span style="font:400 11.5px system-ui;color:#94a3b8">Electroporation — Nucleofection 4D</span></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0"><div style="width:15px;height:15px;border-radius:3px;border:2px solid #cbd5e1;flex-shrink:0"></div><span style="font:400 11.5px system-ui;color:#94a3b8">48h recovery in X-VIVO 15 media</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="width:248px;border-left:1px solid #e5e7eb;background:white;display:flex;flex-direction:column;flex-shrink:0">
+          <div style="padding:11px 12px 0;border-bottom:1px solid #f1f3f5">
+            <div style="display:flex">
+              <div style="flex:1;padding:7px 0;border-bottom:2px solid #1d4ed8;text-align:center;font:600 11.5px system-ui;color:#1d4ed8;cursor:pointer">AI Insights</div>
+              <div style="flex:1;padding:7px 0;border-bottom:2px solid transparent;text-align:center;font:500 11.5px system-ui;color:#94a3b8;cursor:pointer">Comments (2)</div>
+              <div style="flex:1;padding:7px 0;border-bottom:2px solid transparent;text-align:center;font:500 11.5px system-ui;color:#94a3b8;cursor:pointer">History</div>
+            </div>
+          </div>
+          <div style="flex:1;padding:10px;overflow:auto;display:flex;flex-direction:column;gap:8px">
+            <div style="background:#eff6ff;border-radius:7px;padding:10px;border-left:3px solid #1d4ed8">
+              <div style="font:600 10.5px system-ui;color:#1d4ed8;margin-bottom:4px">⚠ Efficiency Alert</div>
+              <p style="font:400 11px/1.5 system-ui;color:#1e3a8a;margin:0">Transfection eff. 23% below your 5-run avg. Compare Cas9:sgRNA ratio with EXP-2026-0131 where a 1:2.5 ratio resolved similar drop.</p>
+            </div>
+            <div style="background:#f0fdf4;border-radius:7px;padding:10px;border-left:3px solid #22c55e">
+              <div style="font:600 10.5px system-ui;color:#15803d;margin-bottom:4px">✓ Steps 1–2 On Track</div>
+              <p style="font:400 11px/1.5 system-ui;color:#166534;margin:0">Ficoll separation yield consistent with lab average. Viability &gt;95%.</p>
+            </div>
+            <div style="background:#f8fafc;border-radius:7px;padding:10px;border-left:3px solid #e2e8f0">
+              <div style="font:600 10.5px system-ui;color:#64748b;margin-bottom:4px">Suggestion</div>
+              <p style="font:400 11px/1.5 system-ui;color:#334155;margin:0 0 7px">Add trypan blue viability check pre-electroporation — improves Cas9 delivery ~18% per 3 internal runs.</p>
+              <button style="background:#1d4ed8;color:white;border:none;border-radius:4px;padding:4px 9px;font:600 10px system-ui;cursor:pointer">+ Add Step</button>
+            </div>
+          </div>
+          <div style="padding:9px;border-top:1px solid #f1f3f5">
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:7px 10px;font:400 11.5px system-ui;color:#94a3b8">Add a comment…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- end 1a -->
+
+
+<!-- ═══════════════════════ 1b: LABRA WARM TEAL ═══════════════════════ -->
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a> "Labra" · Warm &amp; notebook-first, teal, top nav, card grid</div>
+
+<div class="slbl">Dashboard</div>
+<div class="dv-card" style="width:1200px">
+  <div style="background:#272727;padding:9px 14px;display:flex;align-items:center;gap:11px">
+    <div style="display:flex;gap:5px"><div style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></div><div style="width:11px;height:11px;border-radius:50%;background:#febc2e"></div><div style="width:11px;height:11px;border-radius:50%;background:#28c840"></div></div>
+    <div style="flex:1;background:#3a3a3a;border-radius:5px;padding:3px 14px;font:400 11px 'DM Sans',system-ui;color:#999;text-align:center;max-width:300px;margin:0 auto">app.labra.io/home</div>
+  </div>
+  <div style="height:648px;background:#faf9f6;display:flex;flex-direction:column;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif">
+    <!-- Top nav -->
+    <div style="background:white;border-bottom:1px solid #ece8e0;padding:0 28px;height:54px;display:flex;align-items:center;gap:0;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:9px;margin-right:36px">
+        <div style="width:28px;height:28px;border-radius:7px;background:#0d9488;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 3h3v3H3zM9 3h3v3H9zM3 9h3v3H3z" fill="white"/><circle cx="10.5" cy="10.5" r="2" fill="white" opacity=".6"/></svg></div>
+        <span style="font:700 14.5px/1 'DM Sans',system-ui;color:#1a1a1a;letter-spacing:-.2px">Labra</span>
+      </div>
+      <nav style="display:flex;align-items:center;gap:0;flex:1">
+        <div style="padding:0 14px;height:54px;display:flex;align-items:center;border-bottom:2px solid #0d9488;font:600 13px 'DM Sans',system-ui;color:#0d9488;cursor:pointer">Home</div>
+        <div style="padding:0 14px;height:54px;display:flex;align-items:center;border-bottom:2px solid transparent;font:500 13px 'DM Sans',system-ui;color:#6b7280;cursor:pointer">Experiments</div>
+        <div style="padding:0 14px;height:54px;display:flex;align-items:center;border-bottom:2px solid transparent;font:500 13px 'DM Sans',system-ui;color:#6b7280;cursor:pointer">Protocols</div>
+        <div style="padding:0 14px;height:54px;display:flex;align-items:center;border-bottom:2px solid transparent;font:500 13px 'DM Sans',system-ui;color:#6b7280;cursor:pointer">Inventory</div>
+        <div style="padding:0 14px;height:54px;display:flex;align-items:center;border-bottom:2px solid transparent;font:500 13px 'DM Sans',system-ui;color:#6b7280;cursor:pointer">Analytics</div>
+      </nav>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:6px;background:#f5f3ef;border:1px solid #e8e3db;border-radius:8px;padding:6px 12px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="#9ca3af" stroke-width="1.2" fill="none"/><path d="M8 8l2.5 2.5" stroke="#9ca3af" stroke-width="1.2" stroke-linecap="round"/></svg><span style="font:400 12px 'DM Sans',system-ui;color:#9ca3af">Search…</span></div>
+        <div style="width:32px;height:32px;border-radius:50%;background:#f5f3ef;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5C4.5 1.5 2.5 3.5 2.5 6v2.5L1 11h12l-1.5-2.5V6C11.5 3.5 9.5 1.5 7 1.5z" stroke="#6b7280" stroke-width="1.2" fill="none"/><path d="M5.5 11c0 .8.7 1.5 1.5 1.5s1.5-.7 1.5-1.5" stroke="#6b7280" stroke-width="1.2" fill="none"/></svg></div>
+        <button style="background:#0d9488;color:white;border:none;border-radius:8px;padding:7px 14px;font:600 12.5px 'DM Sans',system-ui;cursor:pointer">+ New Entry</button>
+        <div style="width:32px;height:32px;border-radius:50%;background:#0d9488;display:flex;align-items:center;justify-content:center;font:600 11.5px 'DM Sans',system-ui;color:white;cursor:pointer">SC</div>
+      </div>
+    </div>
+    <!-- Content area -->
+    <div style="flex:1;display:flex;overflow:hidden">
+      <!-- Main content -->
+      <div style="flex:1;padding:24px 28px;overflow:auto;display:flex;flex-direction:column;gap:20px">
+        <!-- Greeting + AI card -->
+        <div style="background:linear-gradient(135deg,#f0fdfa,#faf9f6);border:1px solid #ccfbf1;border-radius:12px;padding:20px 22px;display:flex;gap:20px;align-items:flex-start">
+          <div style="flex:1">
+            <p style="font:400 12px 'DM Sans',system-ui;color:#94a3b8;margin:0 0 3px">Sunday, July 6 · Good morning</p>
+            <h2 style="font:700 20px 'DM Sans',system-ui;color:#134e4a;margin:0 0 10px;letter-spacing:-.3px">Dr. Sofia Chen 👋</h2>
+            <p style="font:400 13px/1.65 'DM Sans',system-ui;color:#374151;margin:0">You have <strong style="color:#0d9488">3 active experiments</strong> and a protocol step due today. Your CRISPR run from yesterday needs review — AI flagged an efficiency variance worth checking before the next transfection step.</p>
+          </div>
+          <div style="width:220px;background:white;border-radius:10px;border:1px solid #ccfbf1;padding:14px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
+              <div style="width:22px;height:22px;border-radius:6px;background:#0d9488;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="2" fill="white"/><path d="M5.5 1.5v1M5.5 8v1M1.5 5.5h1M8 5.5h1" stroke="white" stroke-width="1" stroke-linecap="round"/></svg></div>
+              <span style="font:600 11.5px 'DM Sans',system-ui;color:#0f172a">AI Daily Summary</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:#fff7ed;border-radius:5px"><div style="width:6px;height:6px;border-radius:50%;background:#f97316;flex-shrink:0"></div><span style="font:400 10.5px 'DM Sans',system-ui;color:#7c3a00">EXP-0142 efficiency anomaly</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:#f0fdf4;border-radius:5px"><div style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0"></div><span style="font:400 10.5px 'DM Sans',system-ui;color:#166534">Flow cytometry on track</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:#f0f9ff;border-radius:5px"><div style="width:6px;height:6px;border-radius:50%;background:#0ea5e9;flex-shrink:0"></div><span style="font:400 10.5px 'DM Sans',system-ui;color:#0c4a6e">2 protocol steps due today</span></div>
+            </div>
+          </div>
+        </div>
+        <!-- Section heading -->
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <h3 style="font:600 14px 'DM Sans',system-ui;color:#1a1a1a;margin:0">Recent Experiments</h3>
+          <a style="font:500 12.5px 'DM Sans',system-ui;color:#0d9488;cursor:pointer">View all →</a>
+        </div>
+        <!-- Experiment cards -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+          <div style="background:white;border-radius:10px;border:1px solid #e8e3db;padding:16px;cursor:pointer">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+              <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font:600 10px 'DM Sans',system-ui">Active</span>
+              <span style="font:400 10.5px 'DM Sans',system-ui;color:#94a3b8">2h ago</span>
+            </div>
+            <h4 style="font:600 13.5px 'DM Sans',system-ui;color:#111827;margin:0 0 4px;line-height:1.3">CRISPR-Cas9 T-Cell Knockout</h4>
+            <p style="font:400 11.5px 'DM Sans',system-ui;color:#6b7280;margin:0 0 12px">EXP-2026-0142 · Immunotherapy</p>
+            <div style="display:flex;gap:5px;margin-bottom:12px"><span style="background:#f0fdfa;color:#0d9488;padding:2px 7px;border-radius:4px;font:500 10px 'DM Sans',system-ui">CRISPR</span><span style="background:#f0fdfa;color:#0d9488;padding:2px 7px;border-radius:4px;font:500 10px 'DM Sans',system-ui">T-cells</span></div>
+            <div style="width:100%;height:4px;background:#e8e3db;border-radius:4px"><div style="width:40%;height:100%;background:#0d9488;border-radius:4px"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px"><span style="font:400 10px 'DM Sans',system-ui;color:#9ca3af">Progress</span><span style="font:600 10px 'DM Sans',system-ui;color:#0d9488">2 / 5 steps</span></div>
+          </div>
+          <div style="background:white;border-radius:10px;border:1px solid #e8e3db;padding:16px;cursor:pointer">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+              <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font:600 10px 'DM Sans',system-ui">Active</span>
+              <span style="font:400 10.5px 'DM Sans',system-ui;color:#94a3b8">Yesterday</span>
+            </div>
+            <h4 style="font:600 13.5px 'DM Sans',system-ui;color:#111827;margin:0 0 4px;line-height:1.3">Flow Cytometry — CD4/CD8 Panel</h4>
+            <p style="font:400 11.5px 'DM Sans',system-ui;color:#6b7280;margin:0 0 12px">EXP-2026-0141 · Immunotherapy</p>
+            <div style="display:flex;gap:5px;margin-bottom:12px"><span style="background:#f0fdfa;color:#0d9488;padding:2px 7px;border-radius:4px;font:500 10px 'DM Sans',system-ui">Flow Cyto</span></div>
+            <div style="width:100%;height:4px;background:#e8e3db;border-radius:4px"><div style="width:70%;height:100%;background:#0d9488;border-radius:4px"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px"><span style="font:400 10px 'DM Sans',system-ui;color:#9ca3af">Progress</span><span style="font:600 10px 'DM Sans',system-ui;color:#0d9488">7 / 10 steps</span></div>
+          </div>
+          <div style="background:white;border-radius:10px;border:1px solid #e8e3db;padding:16px;cursor:pointer">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+              <span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:10px;font:600 10px 'DM Sans',system-ui">Review</span>
+              <span style="font:400 10.5px 'DM Sans',system-ui;color:#94a3b8">3 days ago</span>
+            </div>
+            <h4 style="font:600 13.5px 'DM Sans',system-ui;color:#111827;margin:0 0 4px;line-height:1.3">Western Blot — Protein Expression</h4>
+            <p style="font:400 11.5px 'DM Sans',system-ui;color:#6b7280;margin:0 0 12px">EXP-2026-0139 · Proteomics</p>
+            <div style="display:flex;gap:5px;margin-bottom:12px"><span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:4px;font:500 10px 'DM Sans',system-ui">Needs review</span></div>
+            <div style="width:100%;height:4px;background:#e8e3db;border-radius:4px"><div style="width:100%;height:100%;background:#fbbf24;border-radius:4px"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px"><span style="font:400 10px 'DM Sans',system-ui;color:#9ca3af">Progress</span><span style="font:600 10px 'DM Sans',system-ui;color:#d97706">Awaiting sign-off</span></div>
+          </div>
+        </div>
+      </div>
+      <!-- Right activity sidebar -->
+      <div style="width:260px;border-left:1px solid #ece8e0;background:white;padding:20px 16px;display:flex;flex-direction:column;gap:16px;flex-shrink:0;overflow:auto">
+        <h3 style="font:600 13px 'DM Sans',system-ui;color:#1a1a1a;margin:0">Team Activity</h3>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:9px"><div style="width:28px;height:28px;border-radius:50%;background:#7c3aed;display:flex;align-items:center;justify-content:center;font:600 10px 'DM Sans',system-ui;color:white;flex-shrink:0">MP</div><div><div style="font:500 11.5px 'DM Sans',system-ui;color:#111827">M. Patel</div><p style="font:400 11px 'DM Sans',system-ui;color:#6b7280;margin:2px 0 0;line-height:1.4">Completed step 7 of CD4/CD8 panel</p><div style="font:400 10px 'DM Sans',system-ui;color:#9ca3af;margin-top:2px">1h ago</div></div></div>
+          <div style="display:flex;gap:9px"><div style="width:28px;height:28px;border-radius:50%;background:#0ea5e9;display:flex;align-items:center;justify-content:center;font:600 10px 'DM Sans',system-ui;color:white;flex-shrink:0">JK</div><div><div style="font:500 11.5px 'DM Sans',system-ui;color:#111827">J. Kim</div><p style="font:400 11px 'DM Sans',system-ui;color:#6b7280;margin:2px 0 0;line-height:1.4">Signed off EXP-2026-0138 gel results</p><div style="font:400 10px 'DM Sans',system-ui;color:#9ca3af;margin-top:2px">3h ago</div></div></div>
+          <div style="display:flex;gap:9px"><div style="width:28px;height:28px;border-radius:50%;background:#0d9488;display:flex;align-items:center;justify-content:center;font:600 10px 'DM Sans',system-ui;color:white;flex-shrink:0">SC</div><div><div style="font:500 11.5px 'DM Sans',system-ui;color:#111827">You</div><p style="font:400 11px 'DM Sans',system-ui;color:#6b7280;margin:2px 0 0;line-height:1.4">Started CRISPR experiment EXP-0142</p><div style="font:400 10px 'DM Sans',system-ui;color:#9ca3af;margin-top:2px">Yesterday</div></div></div>
+        </div>
+        <div style="height:1px;background:#ece8e0"></div>
+        <h3 style="font:600 13px 'DM Sans',system-ui;color:#1a1a1a;margin:0">Today's Tasks</h3>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f5f3ef;border-radius:7px"><div style="width:14px;height:14px;border-radius:3px;border:1.5px solid #0d9488;flex-shrink:0"></div><span style="font:400 12px 'DM Sans',system-ui;color:#374151">RNP complex assembly</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f5f3ef;border-radius:7px"><div style="width:14px;height:14px;border-radius:3px;border:1.5px solid #0d9488;flex-shrink:0"></div><span style="font:400 12px 'DM Sans',system-ui;color:#374151">Review WB protein results</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f5f3ef;border-radius:7px"><div style="width:14px;height:14px;border-radius:3px;background:#0d9488;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4l2 2 3-3.5" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span style="font:400 12px 'DM Sans',system-ui;color:#9ca3af;text-decoration:line-through">CD8+ enrichment step</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="slbl">Experiment Editor</div>
+<div class="dv-card" style="width:1200px">
+  <div style="background:#272727;padding:9px 14px;display:flex;align-items:center;gap:11px">
+    <div style="display:flex;gap:5px"><div style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></div><div style="width:11px;height:11px;border-radius:50%;background:#febc2e"></div><div style="width:11px;height:11px;border-radius:50%;background:#28c840"></div></div>
+    <div style="flex:1;background:#3a3a3a;border-radius:5px;padding:3px 14px;font:400 11px 'DM Sans',system-ui;color:#999;text-align:center;max-width:360px;margin:0 auto">app.labra.io/experiments/EXP-2026-0142</div>
+  </div>
+  <div style="height:648px;background:#faf9f6;display:flex;flex-direction:column;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif">
+    <!-- Top nav (same) -->
+    <div style="background:white;border-bottom:1px solid #ece8e0;padding:0 28px;height:54px;display:flex;align-items:center;gap:0;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:9px;margin-right:36px">
+        <div style="width:28px;height:28px;border-radius:7px;background:#0d9488;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 3h3v3H3zM9 3h3v3H9zM3 9h3v3H3z" fill="white"/><circle cx="10.5" cy="10.5" r="2" fill="white" opacity=".6"/></svg></div>
+        <span style="font:700 14.5px/1 'DM Sans',system-ui;color:#1a1a1a;letter-spacing:-.2px">Labra</span>
+      </div>
+      <nav style="display:flex;align-items:center;flex:1">
+        <div style="padding:0 14px;height:54px;display:flex;align-items:center;border-bottom:2px solid transparent;font:500 13px 'DM Sans',system-ui;color:#6b7280;cursor:pointer">Home</div>
+        <div style="padding:0 14px;height:54px;display:flex;align-items:center;border-bottom:2px solid #0d9488;font:600 13px 'DM Sans',system-ui;color:#0d9488;cursor:pointer">Experiments</div>
+        <div style="padding:0 14px;height:54px;display:flex;align-items:center;border-bottom:2px solid transparent;font:500 13px 'DM Sans',system-ui;color:#6b7280;cursor:pointer">Protocols</div>
+        <div style="padding:0 14px;height:54px;display:flex;align-items:center;border-bottom:2px solid transparent;font:500 13px 'DM Sans',system-ui;color:#6b7280;cursor:pointer">Inventory</div>
+      </nav>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button style="background:#f5f3ef;border:1px solid #e8e3db;border-radius:8px;padding:6px 11px;font:500 12px 'DM Sans',system-ui;color:#374151;cursor:pointer">Share</button>
+        <button style="background:#f5f3ef;border:1px solid #e8e3db;border-radius:8px;padding:6px 11px;font:500 12px 'DM Sans',system-ui;color:#374151;cursor:pointer">Export</button>
+        <button style="background:#0d9488;color:white;border:none;border-radius:8px;padding:7px 14px;font:600 12.5px 'DM Sans',system-ui;cursor:pointer">Save</button>
+        <div style="width:32px;height:32px;border-radius:50%;background:#0d9488;display:flex;align-items:center;justify-content:center;font:600 11.5px 'DM Sans',system-ui;color:white">SC</div>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;overflow:hidden">
+      <!-- Document editor -->
+      <div style="flex:1;overflow:auto;padding:32px 0;background:#faf9f6">
+        <div style="max-width:720px;margin:0 auto;padding:0 24px;display:flex;flex-direction:column;gap:20px">
+          <!-- Title -->
+          <div>
+            <div style="font:500 10.5px 'DM Sans',system-ui;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">EXPERIMENT · EXP-2026-0142</div>
+            <input style="font:700 28px/1.2 'DM Sans',system-ui;color:#0f172a;border:none;background:transparent;outline:none;width:100%;letter-spacing:-.5px" value="CRISPR-Cas9 T-Cell Knockout" readonly="readonly"/>
+          </div>
+          <!-- Meta pills -->
+          <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid #ece8e0">
+            <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:white;border:1px solid #e8e3db;border-radius:8px"><svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1" width="9" height="9" rx="1.5" stroke="#9ca3af" stroke-width="1.1" fill="none"/><path d="M1 4h9" stroke="#9ca3af" stroke-width="1.1"/><path d="M4 1v3M7 1v3" stroke="#9ca3af" stroke-width="1.1" stroke-linecap="round"/></svg><span style="font:500 11.5px 'DM Sans',system-ui;color:#374151">Jul 6, 2026</span></div>
+            <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:white;border:1px solid #e8e3db;border-radius:8px"><svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="4" r="2" stroke="#9ca3af" stroke-width="1.1" fill="none"/><path d="M2 10c0-2 1.6-3.5 3.5-3.5S9 8 9 10" stroke="#9ca3af" stroke-width="1.1" stroke-linecap="round" fill="none"/></svg><span style="font:500 11.5px 'DM Sans',system-ui;color:#374151">Dr. S. Chen</span></div>
+            <div style="padding:5px 10px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;font:600 11.5px 'DM Sans',system-ui;color:#0d9488">Active</div>
+            <div style="padding:5px 10px;background:white;border:1px solid #e8e3db;border-radius:8px;font:500 11.5px 'DM Sans',system-ui;color:#374151">Immunotherapy</div>
+            <div style="padding:5px 10px;background:#f0fdfa;border:1px solid #ccfbf1;border-radius:8px;font:500 11px 'DM Sans',system-ui;color:#0d9488">CRISPR</div>
+            <div style="padding:5px 10px;background:#f0fdfa;border:1px solid #ccfbf1;border-radius:8px;font:500 11px 'DM Sans',system-ui;color:#0d9488">T-cells</div>
+          </div>
+          <!-- Rich text body -->
+          <div>
+            <h3 style="font:600 14px 'DM Sans',system-ui;color:#0f172a;margin:0 0 8px">Objective</h3>
+            <p style="font:400 13.5px/1.8 'DM Sans',system-ui;color:#374151;margin:0">Investigate the effect of PD-1 knockout on CD8+ T-cell cytotoxic activation using CRISPR-Cas9 to target the PDCD1 locus in primary human T cells isolated from healthy donor PBMCs. This will inform our understanding of immune checkpoint regulation in our immunotherapy pipeline.</p>
+          </div>
+          <!-- Protocol steps -->
+          <div>
+            <h3 style="font:600 14px 'DM Sans',system-ui;color:#0f172a;margin:0 0 12px">Protocol</h3>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;gap:12px;padding:11px 14px;background:white;border:1px solid #ece8e0;border-radius:9px;align-items:flex-start"><div style="width:16px;height:16px;border-radius:4px;background:#0d9488;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 3-3.5" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div style="flex:1"><div style="font:500 12.5px 'DM Sans',system-ui;color:#6b7280;text-decoration:line-through">PBMC isolation via Ficoll density gradient</div><div style="font:400 10.5px 'DM Sans',system-ui;color:#9ca3af;margin-top:2px">Completed by S. Chen · 9:12 AM · Yield: 92M cells</div></div></div>
+              <div style="display:flex;gap:12px;padding:11px 14px;background:white;border:1px solid #ece8e0;border-radius:9px;align-items:flex-start"><div style="width:16px;height:16px;border-radius:4px;background:#0d9488;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 3-3.5" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div style="flex:1"><div style="font:500 12.5px 'DM Sans',system-ui;color:#6b7280;text-decoration:line-through">CD8+ T cell enrichment — EasySep Human CD8+ Kit</div><div style="font:400 10.5px 'DM Sans',system-ui;color:#9ca3af;margin-top:2px">Completed by M. Patel · 11:30 AM · Purity: 97%</div></div></div>
+              <div style="display:flex;gap:12px;padding:11px 14px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:9px;align-items:flex-start"><div style="width:16px;height:16px;border-radius:4px;border:2px solid #f59e0b;flex-shrink:0;margin-top:1px"></div><div style="flex:1"><div style="font:600 12.5px 'DM Sans',system-ui;color:#0f172a">RNP complex preparation — Cas9 + PD-1 sgRNA</div><div style="font:400 10.5px 'DM Sans',system-ui;color:#d97706;margin-top:2px">In progress · Assigned: S. Chen</div></div></div>
+              <div style="display:flex;gap:12px;padding:11px 14px;background:white;border:1px solid #ece8e0;border-radius:9px;align-items:flex-start;opacity:.6"><div style="width:16px;height:16px;border-radius:4px;border:1.5px solid #d1d5db;flex-shrink:0;margin-top:1px"></div><div><div style="font:400 12.5px 'DM Sans',system-ui;color:#9ca3af">Electroporation — Nucleofection 4D</div></div></div>
+              <div style="display:flex;gap:12px;padding:11px 14px;background:white;border:1px solid #ece8e0;border-radius:9px;align-items:flex-start;opacity:.6"><div style="width:16px;height:16px;border-radius:4px;border:1.5px solid #d1d5db;flex-shrink:0;margin-top:1px"></div><div><div style="font:400 12.5px 'DM Sans',system-ui;color:#9ca3af">48h recovery · X-VIVO 15, 37°C, 5% CO₂</div></div></div>
+            </div>
+          </div>
+          <!-- Notes field -->
+          <div>
+            <h3 style="font:600 14px 'DM Sans',system-ui;color:#0f172a;margin:0 0 8px">Lab Notes</h3>
+            <div style="background:white;border:1px solid #ece8e0;border-radius:9px;padding:14px;font:400 13px/1.7 'DM Sans',system-ui;color:#9ca3af">Start typing your observations…</div>
+          </div>
+        </div>
+      </div>
+      <!-- AI sidebar -->
+      <div style="width:268px;border-left:1px solid #ece8e0;background:white;display:flex;flex-direction:column;flex-shrink:0">
+        <div style="padding:16px 14px 12px;border-bottom:1px solid #ece8e0">
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><div style="width:20px;height:20px;border-radius:5px;background:#0d9488;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="2" fill="white"/><path d="M5.5 1.5v1M5.5 8v1M1.5 5.5h1M8 5.5h1" stroke="white" stroke-width="1" stroke-linecap="round"/></svg></div><span style="font:600 13px 'DM Sans',system-ui;color:#0f172a">Labra AI</span></div>
+          <p style="font:400 11.5px/1.5 'DM Sans',system-ui;color:#6b7280;margin:0">I'm analyzing this experiment in real-time.</p>
+        </div>
+        <div style="flex:1;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:10px">
+          <!-- AI message -->
+          <div style="background:#f0fdfa;border-radius:10px;border-bottom-left-radius:3px;padding:12px">
+            <p style="font:400 12px/1.6 'DM Sans',system-ui;color:#134e4a;margin:0 0 8px">I noticed your transfection efficiency is 23% lower than your 5-run average. This typically correlates with RNP assembly timing or Cas9:sgRNA ratio.</p>
+            <p style="font:400 12px/1.6 'DM Sans',system-ui;color:#134e4a;margin:0">In your EXP-2026-0131, switching to a 1:2.5 ratio resolved a similar issue. Want me to add that note to your current protocol?</p>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:7px;padding:5px 10px;font:500 11.5px 'DM Sans',system-ui;color:#0d9488;cursor:pointer">Yes, add note</button>
+            <button style="background:#f5f3ef;border:1px solid #e8e3db;border-radius:7px;padding:5px 10px;font:500 11.5px 'DM Sans',system-ui;color:#6b7280;cursor:pointer">Show comparison</button>
+          </div>
+          <div style="background:#f0fdfa;border-radius:10px;border-bottom-left-radius:3px;padding:12px">
+            <p style="font:400 12px/1.6 'DM Sans',system-ui;color:#134e4a;margin:0">Steps 1 and 2 look great — cell yield and purity are both above your lab's average. You're in good shape to proceed.</p>
+          </div>
+        </div>
+        <div style="padding:10px;border-top:1px solid #ece8e0">
+          <div style="background:#f5f3ef;border:1px solid #e8e3db;border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:8px">
+            <input style="flex:1;border:none;background:transparent;outline:none;font:400 12.5px 'DM Sans',system-ui;color:#374151" placeholder="Ask Labra AI anything…" readonly="readonly"/>
+            <button style="background:#0d9488;color:white;border:none;border-radius:6px;padding:5px 10px;font:600 11.5px 'DM Sans',system-ui;cursor:pointer">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- end 1b -->
+
+
+<!-- ═══════════════════════ 1c: NUCLEUS DARK ═══════════════════════ -->
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a> "Nucleus" · Dark, AI-first, icon rail, split panel, data-dense</div>
+
+<div class="slbl">Dashboard</div>
+<div class="dv-card" style="width:1200px">
+  <div style="background:#1a1a1a;padding:9px 14px;display:flex;align-items:center;gap:11px;border-bottom:1px solid rgba(255,255,255,.06)">
+    <div style="display:flex;gap:5px"><div style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></div><div style="width:11px;height:11px;border-radius:50%;background:#febc2e"></div><div style="width:11px;height:11px;border-radius:50%;background:#28c840"></div></div>
+    <div style="flex:1;background:rgba(255,255,255,.07);border-radius:5px;padding:3px 14px;font:400 11px 'JetBrains Mono','Space Grotesk',monospace;color:#555;text-align:center;max-width:320px;margin:0 auto">nucleus.lab / dashboard</div>
+  </div>
+  <div style="display:flex;height:648px;background:#0d0f16;overflow:hidden;font-family:'Space Grotesk',system-ui,sans-serif">
+    <!-- Icon rail -->
+    <div style="width:58px;background:#12141d;border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px;flex-shrink:0">
+      <div style="width:32px;height:32px;border-radius:8px;background:#7c3aed;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3.5" stroke="white" stroke-width="1.4" fill="none"/><circle cx="8" cy="8" r="1" fill="white"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="white" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(124,58,237,.15);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" fill="#7c3aed"/><rect x="9" y="1" width="6" height="6" rx="1.5" fill="#7c3aed" opacity=".5"/><rect x="1" y="9" width="6" height="6" rx="1.5" fill="#7c3aed" opacity=".5"/><rect x="9" y="9" width="6" height="6" rx="1.5" fill="#7c3aed" opacity=".3"/></svg></div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="2" rx="1" fill="#475569"/><rect x="1" y="7" width="14" height="2" rx="1" fill="#475569"/><rect x="1" y="12" width="9" height="2" rx="1" fill="#475569"/></svg></div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5L1.5 5v4.5C1.5 13 4.5 15.5 8 16c3.5-.5 6.5-3 6.5-6.5V5L8 1.5z" stroke="#475569" stroke-width="1.3" fill="none"/></svg></div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="3.5" width="14" height="9" rx="2" stroke="#475569" stroke-width="1.3" fill="none"/><path d="M4 8h8M4 10.5h5" stroke="#475569" stroke-width="1.1" stroke-linecap="round"/></svg></div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 12h2.5v3H2zM6.5 8.5h2.5v6.5H6.5zM11 5.5h2.5v9H11z" fill="#475569"/></svg></div>
+      <div style="flex:1"></div>
+      <div style="width:30px;height:30px;border-radius:50%;background:#7c3aed;display:flex;align-items:center;justify-content:center;font:700 10px 'Space Grotesk',system-ui;color:white;cursor:pointer">SC</div>
+    </div>
+    <!-- Main: Experiment list -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <!-- Top bar -->
+      <div style="background:#12141d;border-bottom:1px solid rgba(255,255,255,.06);padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <div>
+          <span style="font:600 15px 'Space Grotesk',system-ui;color:#e2e8f0">Experiments</span>
+          <span style="font:400 12px 'JetBrains Mono',monospace;color:#475569;margin-left:10px">24 total</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:5px 11px"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="#475569" stroke-width="1.2" fill="none"/><path d="M8 8l2.5 2.5" stroke="#475569" stroke-width="1.2" stroke-linecap="round"/></svg><span style="font:400 12px 'Space Grotesk',system-ui;color:#475569">Search…</span></div>
+          <button style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:7px 13px;font:600 12px 'Space Grotesk',system-ui;cursor:pointer">+ New</button>
+        </div>
+      </div>
+      <!-- Stats strip -->
+      <div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">
+        <div style="flex:1;padding:11px 18px;border-right:1px solid rgba(255,255,255,.06)"><div style="font:500 9px 'Space Grotesk',system-ui;color:#475569;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Active</div><div style="font:700 20px 'Space Grotesk',system-ui;color:#e2e8f0;line-height:1">12</div></div>
+        <div style="flex:1;padding:11px 18px;border-right:1px solid rgba(255,255,255,.06)"><div style="font:500 9px 'Space Grotesk',system-ui;color:#475569;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Protocols</div><div style="font:700 20px 'Space Grotesk',system-ui;color:#e2e8f0;line-height:1">48</div></div>
+        <div style="flex:1;padding:11px 18px;border-right:1px solid rgba(255,255,255,.06)"><div style="font:500 9px 'Space Grotesk',system-ui;color:#475569;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Team</div><div style="font:700 20px 'Space Grotesk',system-ui;color:#e2e8f0;line-height:1">7</div></div>
+        <div style="flex:1;padding:11px 18px;background:rgba(124,58,237,.08)"><div style="font:500 9px 'Space Grotesk',system-ui;color:#7c3aed;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">AI Alerts</div><div style="font:700 20px 'Space Grotesk',system-ui;color:#7c3aed;line-height:1">3</div></div>
+      </div>
+      <!-- Filter row -->
+      <div style="display:flex;gap:0;padding:0 18px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">
+        <div style="padding:9px 12px;border-bottom:2px solid #7c3aed;font:600 11.5px 'Space Grotesk',system-ui;color:#7c3aed;cursor:pointer">All</div>
+        <div style="padding:9px 12px;border-bottom:2px solid transparent;font:500 11.5px 'Space Grotesk',system-ui;color:#475569;cursor:pointer">Active (12)</div>
+        <div style="padding:9px 12px;border-bottom:2px solid transparent;font:500 11.5px 'Space Grotesk',system-ui;color:#475569;cursor:pointer">Complete (8)</div>
+        <div style="padding:9px 12px;border-bottom:2px solid transparent;font:500 11.5px 'Space Grotesk',system-ui;color:#475569;cursor:pointer">Draft (4)</div>
+      </div>
+      <!-- List -->
+      <div style="flex:1;overflow:auto">
+        <div style="border-bottom:1px solid rgba(255,255,255,.05);padding:12px 18px;display:flex;align-items:center;gap:12px;background:rgba(124,58,237,.06);cursor:pointer">
+          <div style="width:6px;height:6px;border-radius:50%;background:#7c3aed;flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px 'Space Grotesk',system-ui;color:#e2e8f0;margin-bottom:2px">CRISPR-Cas9 T-Cell Knockout</div>
+            <div style="font:400 10.5px 'JetBrains Mono',monospace;color:#475569">EXP-2026-0142 · Immunotherapy</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(124,58,237,.2);color:#a78bfa;padding:2px 8px;border-radius:4px;font:600 10px 'Space Grotesk',system-ui">ACTIVE</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#475569">2h ago</span>
+            <div style="display:flex;align-items:center;gap:4px"><div style="width:18px;height:18px;border-radius:50%;background:#7c3aed;display:flex;align-items:center;justify-content:center;font:700 8px 'Space Grotesk',system-ui;color:white">SC</div></div>
+          </div>
+        </div>
+        <div style="border-bottom:1px solid rgba(255,255,255,.05);padding:12px 18px;display:flex;align-items:center;gap:12px;cursor:pointer">
+          <div style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px 'Space Grotesk',system-ui;color:#e2e8f0;margin-bottom:2px">Flow Cytometry — CD4/CD8 Panel</div>
+            <div style="font:400 10.5px 'JetBrains Mono',monospace;color:#475569">EXP-2026-0141 · Immunotherapy</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(34,197,94,.15);color:#4ade80;padding:2px 8px;border-radius:4px;font:600 10px 'Space Grotesk',system-ui">ACTIVE</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#475569">Yesterday</span>
+            <div style="width:18px;height:18px;border-radius:50%;background:#0ea5e9;display:flex;align-items:center;justify-content:center;font:700 8px 'Space Grotesk',system-ui;color:white">MP</div>
+          </div>
+        </div>
+        <div style="border-bottom:1px solid rgba(255,255,255,.05);padding:12px 18px;display:flex;align-items:center;gap:12px;cursor:pointer">
+          <div style="width:6px;height:6px;border-radius:50%;background:#f97316;flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px 'Space Grotesk',system-ui;color:#e2e8f0;margin-bottom:2px">Western Blot — Protein Expression</div>
+            <div style="font:400 10.5px 'JetBrains Mono',monospace;color:#475569">EXP-2026-0139 · Proteomics</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(249,115,22,.15);color:#fb923c;padding:2px 8px;border-radius:4px;font:600 10px 'Space Grotesk',system-ui">REVIEW</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#475569">3d ago</span>
+            <div style="width:18px;height:18px;border-radius:50%;background:#7c3aed;display:flex;align-items:center;justify-content:center;font:700 8px 'Space Grotesk',system-ui;color:white">SC</div>
+          </div>
+        </div>
+        <div style="border-bottom:1px solid rgba(255,255,255,.05);padding:12px 18px;display:flex;align-items:center;gap:12px;cursor:pointer">
+          <div style="width:6px;height:6px;border-radius:50%;background:#06b6d4;flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px 'Space Grotesk',system-ui;color:#e2e8f0;margin-bottom:2px">Gel Electrophoresis — Batch 7</div>
+            <div style="font:400 10.5px 'JetBrains Mono',monospace;color:#475569">EXP-2026-0138 · Genomics</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(6,182,212,.15);color:#22d3ee;padding:2px 8px;border-radius:4px;font:600 10px 'Space Grotesk',system-ui">COMPLETE</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#475569">7d ago</span>
+            <div style="width:18px;height:18px;border-radius:50%;background:#0ea5e9;display:flex;align-items:center;justify-content:center;font:700 8px 'Space Grotesk',system-ui;color:white">JK</div>
+          </div>
+        </div>
+        <div style="border-bottom:1px solid rgba(255,255,255,.05);padding:12px 18px;display:flex;align-items:center;gap:12px;cursor:pointer">
+          <div style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px 'Space Grotesk',system-ui;color:#e2e8f0;margin-bottom:2px">Single-cell RNA Sequencing — Batch 3</div>
+            <div style="font:400 10.5px 'JetBrains Mono',monospace;color:#475569">EXP-2026-0136 · Genomics</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(34,197,94,.15);color:#4ade80;padding:2px 8px;border-radius:4px;font:600 10px 'Space Grotesk',system-ui">ACTIVE</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#475569">2d ago</span>
+            <div style="width:18px;height:18px;border-radius:50%;background:#7c3aed;display:flex;align-items:center;justify-content:center;font:700 8px 'Space Grotesk',system-ui;color:white">AR</div>
+          </div>
+        </div>
+        <div style="padding:12px 18px;display:flex;align-items:center;gap:12px;cursor:pointer">
+          <div style="width:6px;height:6px;border-radius:50%;background:#475569;flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px 'Space Grotesk',system-ui;color:#475569;margin-bottom:2px">PCR Validation — Knockout Confirmation</div>
+            <div style="font:400 10.5px 'JetBrains Mono',monospace;color:#334155">EXP-2026-0135 · Immunotherapy</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(71,85,105,.2);color:#64748b;padding:2px 8px;border-radius:4px;font:600 10px 'Space Grotesk',system-ui">DRAFT</span>
+            <span style="font:400 11px 'JetBrains Mono',monospace;color:#334155">5d ago</span>
+            <div style="width:18px;height:18px;border-radius:50%;background:#334155;display:flex;align-items:center;justify-content:center;font:700 8px 'Space Grotesk',system-ui;color:white">SC</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- AI Panel -->
+    <div style="width:318px;border-left:1px solid rgba(255,255,255,.06);background:#12141d;display:flex;flex-direction:column;flex-shrink:0">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:24px;height:24px;border-radius:6px;background:#7c3aed;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="2" fill="white"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11M2.5 2.5l1 1M8.5 8.5l1 1M2.5 9.5l1-1M8.5 3.5l1-1" stroke="white" stroke-width="1" stroke-linecap="round"/></svg></div>
+          <span style="font:600 13px 'Space Grotesk',system-ui;color:#e2e8f0">Nucleus AI</span>
+          <div style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:#22c55e"></div>
+        </div>
+      </div>
+      <div style="flex:1;padding:14px;overflow:auto;display:flex;flex-direction:column;gap:10px">
+        <div style="background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.2);border-radius:10px;border-bottom-left-radius:3px;padding:12px">
+          <div style="font:600 10px 'Space Grotesk',system-ui;color:#7c3aed;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Alert · EXP-2026-0142</div>
+          <p style="font:400 12px/1.6 'Space Grotesk',system-ui;color:#c4b5fd;margin:0">Transfection efficiency has dropped 23% below your rolling average. Based on pattern analysis across 12 similar runs, this correlates with Cas9:sgRNA ratio drift during RNP assembly.</p>
+        </div>
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;border-bottom-left-radius:3px;padding:12px">
+          <p style="font:400 12px/1.6 'Space Grotesk',system-ui;color:#94a3b8;margin:0">I've cross-referenced with EXP-2026-0131 where you saw the same signature. Adjusting ratio to 1:2.5 resolved it within 2 days. Shall I update the protocol?</p>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button style="background:rgba(124,58,237,.2);border:1px solid rgba(124,58,237,.3);border-radius:6px;padding:5px 10px;font:500 11.5px 'Space Grotesk',system-ui;color:#a78bfa;cursor:pointer">Update protocol</button>
+          <button style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:5px 10px;font:500 11.5px 'Space Grotesk',system-ui;color:#475569;cursor:pointer">Show data</button>
+          <button style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:5px 10px;font:500 11.5px 'Space Grotesk',system-ui;color:#475569;cursor:pointer">Dismiss</button>
+        </div>
+        <div style="background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.12);border-radius:10px;border-bottom-left-radius:3px;padding:12px">
+          <div style="font:600 10px 'Space Grotesk',system-ui;color:#06b6d4;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Analysis · All Experiments</div>
+          <p style="font:400 12px/1.6 'Space Grotesk',system-ui;color:#67e8f9;margin:0">Your lab's output is 18% above monthly target. Flow cytometry run is on track for completion by Thursday.</p>
+        </div>
+      </div>
+      <div style="padding:10px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:8px">
+          <input style="flex:1;border:none;background:transparent;outline:none;font:400 12.5px 'Space Grotesk',system-ui;color:#475569" placeholder="Ask about any experiment…" readonly="readonly"/>
+          <button style="background:#7c3aed;color:white;border:none;border-radius:5px;padding:5px 10px;font:600 11px 'Space Grotesk',system-ui;cursor:pointer">↑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="slbl">Experiment Editor</div>
+<div class="dv-card" style="width:1200px">
+  <div style="background:#1a1a1a;padding:9px 14px;display:flex;align-items:center;gap:11px;border-bottom:1px solid rgba(255,255,255,.06)">
+    <div style="display:flex;gap:5px"><div style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></div><div style="width:11px;height:11px;border-radius:50%;background:#febc2e"></div><div style="width:11px;height:11px;border-radius:50%;background:#28c840"></div></div>
+    <div style="flex:1;background:rgba(255,255,255,.07);border-radius:5px;padding:3px 14px;font:400 11px 'JetBrains Mono',monospace;color:#555;text-align:center;max-width:380px;margin:0 auto">nucleus.lab / experiments / EXP-2026-0142</div>
+  </div>
+  <div style="display:flex;height:648px;background:#0d0f16;overflow:hidden;font-family:'Space Grotesk',system-ui,sans-serif">
+    <!-- Icon rail (same) -->
+    <div style="width:58px;background:#12141d;border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px;flex-shrink:0">
+      <div style="width:32px;height:32px;border-radius:8px;background:#7c3aed;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3.5" stroke="white" stroke-width="1.4" fill="none"/><circle cx="8" cy="8" r="1" fill="white"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="white" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" fill="#475569"/><rect x="9" y="1" width="6" height="6" rx="1.5" fill="#475569"/><rect x="1" y="9" width="6" height="6" rx="1.5" fill="#475569"/><rect x="9" y="9" width="6" height="6" rx="1.5" fill="#334155"/></svg></div>
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(124,58,237,.15);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="2" rx="1" fill="#7c3aed"/><rect x="1" y="7" width="14" height="2" rx="1" fill="#7c3aed"/><rect x="1" y="12" width="9" height="2" rx="1" fill="#7c3aed"/></svg></div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5L1.5 5v4.5C1.5 13 4.5 15.5 8 16c3.5-.5 6.5-3 6.5-6.5V5L8 1.5z" stroke="#475569" stroke-width="1.3" fill="none"/></svg></div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="3.5" width="14" height="9" rx="2" stroke="#475569" stroke-width="1.3" fill="none"/></svg></div>
+      <div style="flex:1"></div>
+      <div style="width:30px;height:30px;border-radius:50%;background:#7c3aed;display:flex;align-items:center;justify-content:center;font:700 10px 'Space Grotesk',system-ui;color:white">SC</div>
+    </div>
+    <!-- Editor split -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <!-- Editor top bar -->
+      <div style="background:#12141d;border-bottom:1px solid rgba(255,255,255,.06);padding:0 18px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:8px;font:400 11px 'JetBrains Mono',monospace;color:#475569"><span>experiments</span><span>/</span><span style="color:#a78bfa">EXP-2026-0142</span></div>
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="background:rgba(124,58,237,.2);color:#a78bfa;padding:2px 8px;border-radius:4px;font:600 10px 'Space Grotesk',system-ui">ACTIVE</span>
+          <div style="display:flex;gap:0;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;overflow:hidden">
+            <button style="background:rgba(124,58,237,.2);color:#a78bfa;border:none;padding:5px 11px;font:600 11px 'Space Grotesk',system-ui;cursor:pointer">Edit</button>
+            <button style="background:transparent;color:#475569;border:none;padding:5px 11px;font:500 11px 'Space Grotesk',system-ui;cursor:pointer">Preview</button>
+          </div>
+          <button style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:6px 12px;font:600 11.5px 'Space Grotesk',system-ui;cursor:pointer">Save</button>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;overflow:hidden">
+        <!-- Dark editor area -->
+        <div style="flex:1;overflow:auto;padding:20px 22px;background:#0d0f16;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <div style="font:400 10px 'JetBrains Mono',monospace;color:#475569;margin-bottom:6px"># title</div>
+            <input style="font:700 22px 'Space Grotesk',system-ui;color:#e2e8f0;border:none;background:transparent;outline:none;width:100%;letter-spacing:-.3px" value="CRISPR-Cas9 T-Cell Knockout" readonly="readonly"/>
+          </div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.06)">
+            <span style="font:400 10.5px 'JetBrains Mono',monospace;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:#475569;padding:3px 8px;border-radius:4px">EXP-2026-0142</span>
+            <span style="font:500 10.5px 'Space Grotesk',system-ui;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:#94a3b8;padding:3px 8px;border-radius:4px">Jul 6 2026</span>
+            <span style="font:500 10.5px 'Space Grotesk',system-ui;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.2);color:#a78bfa;padding:3px 8px;border-radius:4px">Immunotherapy</span>
+            <span style="font:500 10.5px 'Space Grotesk',system-ui;background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.15);color:#22d3ee;padding:3px 8px;border-radius:4px">CRISPR</span>
+          </div>
+          <!-- Markdown editor content -->
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.8;color:#94a3b8;display:flex;flex-direction:column;gap:4px">
+            <div style="color:#7c3aed">## Objective</div>
+            <div style="color:#cbd5e1">Investigate PD-1 knockout effect on CD8+ T-cell cytotoxic activation.</div>
+            <div style="color:#cbd5e1">CRISPR-Cas9 targeting PDCD1 locus in primary human T cells.</div>
+            <div></div>
+            <div style="color:#7c3aed">## Protocol</div>
+            <div><span style="color:#22c55e">- [x]</span> <span style="color:#475569;text-decoration:line-through">PBMC isolation via Ficoll gradient</span></div>
+            <div><span style="color:#22c55e">- [x]</span> <span style="color:#475569;text-decoration:line-through">CD8+ T cell enrichment — EasySep Kit</span></div>
+            <div><span style="color:#f59e0b">- [ ]</span> <span style="color:#e2e8f0">RNP assembly — Cas9 + PD-1 sgRNA</span> <span style="color:#7c3aed">← in progress</span></div>
+            <div><span style="color:#475569">- [ ]</span> <span style="color:#475569">Electroporation — Nucleofection 4D</span></div>
+            <div><span style="color:#475569">- [ ]</span> <span style="color:#475569">48h recovery in X-VIVO 15</span></div>
+            <div></div>
+            <div style="color:#7c3aed">## Notes</div>
+            <div style="color:#334155">|</div>
+          </div>
+        </div>
+        <!-- AI context panel -->
+        <div style="width:310px;border-left:1px solid rgba(255,255,255,.06);background:#12141d;display:flex;flex-direction:column;flex-shrink:0">
+          <div style="padding:13px 14px;border-bottom:1px solid rgba(255,255,255,.06)">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">
+              <div style="width:20px;height:20px;border-radius:5px;background:#7c3aed;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="2" fill="white"/><path d="M5.5 1.5v1M5.5 8v1M1.5 5.5h1M8 5.5h1" stroke="white" stroke-width="1" stroke-linecap="round"/></svg></div>
+              <span style="font:600 12.5px 'Space Grotesk',system-ui;color:#e2e8f0">Nucleus AI</span>
+              <span style="margin-left:auto;font:400 10px 'JetBrains Mono',monospace;color:#475569">monitoring</span>
+            </div>
+          </div>
+          <div style="flex:1;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:8px">
+            <div style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.18);border-radius:8px;border-bottom-left-radius:2px;padding:11px">
+              <div style="font:600 9.5px 'Space Grotesk',system-ui;color:#7c3aed;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">Efficiency Alert</div>
+              <p style="font:400 11.5px/1.55 'Space Grotesk',system-ui;color:#c4b5fd;margin:0">23% efficiency drop vs. 5-run avg. Likely Cas9:sgRNA ratio. I found the same pattern in EXP-0131 — want me to pull the fix?</p>
+            </div>
+            <div style="display:flex;gap:5px">
+              <button style="background:rgba(124,58,237,.18);border:1px solid rgba(124,58,237,.25);border-radius:5px;padding:5px 9px;font:500 10.5px 'Space Grotesk',system-ui;color:#a78bfa;cursor:pointer">Pull fix</button>
+              <button style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:5px;padding:5px 9px;font:500 10.5px 'Space Grotesk',system-ui;color:#475569;cursor:pointer">Compare runs</button>
+            </div>
+            <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.12);border-radius:8px;border-bottom-left-radius:2px;padding:11px">
+              <div style="font:600 9.5px 'Space Grotesk',system-ui;color:#22c55e;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">Steps 1–2 ✓</div>
+              <p style="font:400 11.5px/1.55 'Space Grotesk',system-ui;color:#4ade80;margin:0">Yield and viability within expected range. CD8+ purity 97% — above lab avg of 94%.</p>
+            </div>
+            <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;border-bottom-left-radius:2px;padding:11px">
+              <div style="font:600 9.5px 'Space Grotesk',system-ui;color:#06b6d4;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">Suggested Step</div>
+              <p style="font:400 11.5px/1.55 'Space Grotesk',system-ui;color:#94a3b8;margin:0 0 7px">Trypan blue viability check before electroporation correlates with +18% delivery improvement across 7 similar protocols in your lab history.</p>
+              <button style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.2);border-radius:5px;padding:4px 9px;font:500 10.5px 'Space Grotesk',system-ui;color:#22d3ee;cursor:pointer">Insert step</button>
+            </div>
+          </div>
+          <div style="padding:10px;border-top:1px solid rgba(255,255,255,.06)">
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:7px;padding:8px 11px;display:flex;align-items:center;gap:8px">
+              <input style="flex:1;border:none;background:transparent;outline:none;font:400 12px 'Space Grotesk',system-ui;color:#475569" placeholder="Ask about this experiment…" readonly="readonly"/>
+              <button style="background:#7c3aed;color:white;border:none;border-radius:4px;padding:4px 9px;font:600 10.5px 'Space Grotesk',system-ui;cursor:pointer">↑</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- end 1c -->
+
+</div><!-- end dv-opts -->
+<p class="dv-next">Next: "go deeper on <a class="dv-oid" href="#1b">1b</a> with mobile + iPad frames" · "blend the dark theme of <a class="dv-oid" href="#1c">1c</a> with the card layout of <a class="dv-oid" href="#1b">1b</a>" · "show <a class="dv-oid" href="#1a">1a</a> on iPhone"</p>
+</section>
+
+</x-dc>
+</body>
+</html>
