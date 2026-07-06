@@ -1,4 +1,4 @@
-import type { Experiment, ExperimentDetail } from "./types";
+import type { Experiment, ExperimentDetail, Protocol, ProtocolDetail } from "./types";
 
 export const currentUser = {
   name: "Dr. S. Chen",
@@ -169,5 +169,153 @@ export const experimentDetails: Record<string, ExperimentDetail> = {
       { id: "h3", actor: "M. Patel", action: "Completed step: CD8+ T cell enrichment", timestamp: "Jul 6, 2026 · 11:30 AM" },
       { id: "h4", actor: "AI Assistant", action: "Flagged transfection efficiency anomaly", timestamp: "Jul 6, 2026 · 1:15 PM" },
     ],
+  },
+};
+
+export const protocols: Protocol[] = [
+  {
+    id: "PROT-001",
+    name: "PBMC Isolation — Ficoll Density Gradient",
+    category: "Immunotherapy",
+    version: "v3",
+    stepCount: 6,
+    lastUpdated: "2 weeks ago",
+    updatedBy: "S. Chen",
+    usedCount: 18,
+    successRate: 96,
+  },
+  {
+    id: "PROT-002",
+    name: "CRISPR RNP Complex Assembly",
+    category: "Immunotherapy",
+    version: "v2",
+    stepCount: 4,
+    lastUpdated: "1 month ago",
+    updatedBy: "S. Chen",
+    usedCount: 12,
+    successRate: 89,
+  },
+  {
+    id: "PROT-003",
+    name: "Western Blot — Standard Protein Transfer",
+    category: "Proteomics",
+    version: "v5",
+    stepCount: 9,
+    lastUpdated: "3 days ago",
+    updatedBy: "J. Kim",
+    usedCount: 34,
+    successRate: 94,
+  },
+  {
+    id: "PROT-004",
+    name: "Flow Cytometry — Surface Staining Panel",
+    category: "Immunotherapy",
+    version: "v4",
+    stepCount: 7,
+    lastUpdated: "Yesterday",
+    updatedBy: "M. Patel",
+    usedCount: 27,
+    successRate: 98,
+  },
+  {
+    id: "PROT-005",
+    name: "Gel Electrophoresis — Agarose 1%",
+    category: "Genomics",
+    version: "v2",
+    stepCount: 5,
+    lastUpdated: "1 week ago",
+    updatedBy: "J. Kim",
+    usedCount: 41,
+    successRate: 99,
+  },
+  {
+    id: "PROT-006",
+    name: "RNA Extraction — TRIzol Method",
+    category: "Genomics",
+    version: "v3",
+    stepCount: 8,
+    lastUpdated: "5 days ago",
+    updatedBy: "A. Reyes",
+    usedCount: 22,
+    successRate: 91,
+  },
+];
+
+export const protocolsAIBanner = {
+  title: "AI: CRISPR RNP Assembly efficiency varies with Cas9:sgRNA ratio",
+  body: "Runs using the updated 1:2.5 ratio show 18% higher transfection efficiency on average. Worth locking in as the default.",
+  actionLabel: "View Analysis →",
+  protocolId: "PROT-002",
+};
+
+export const protocolDetails: Record<string, ProtocolDetail> = {
+  "PROT-002": {
+    id: "PROT-002",
+    name: "CRISPR RNP Complex Assembly",
+    category: "Immunotherapy",
+    version: "v2",
+    stepCount: 4,
+    lastUpdated: "1 month ago",
+    updatedBy: "S. Chen",
+    usedCount: 12,
+    successRate: 89,
+    description:
+      "Standard ribonucleoprotein (RNP) assembly for CRISPR-Cas9 delivery via electroporation. Combines recombinant Cas9 protein with in-vitro transcribed or synthetic sgRNA prior to nucleofection.",
+    steps: [
+      {
+        id: "ps1",
+        order: 1,
+        title: "Thaw and equilibrate reagents",
+        description: "Thaw Cas9 protein and sgRNA on ice. Equilibrate to room temperature for 10 min before mixing.",
+        duration: "10 min",
+        reagents: ["Cas9 protein (10 mg/mL)", "sgRNA (100 µM)"],
+      },
+      {
+        id: "ps2",
+        order: 2,
+        title: "Combine Cas9 and sgRNA",
+        description: "Mix at a 1:2.5 molar ratio (Cas9:sgRNA) in Buffer T. Gently pipette to combine — do not vortex.",
+        duration: "2 min",
+        reagents: ["Buffer T", "Cas9 protein", "sgRNA"],
+      },
+      {
+        id: "ps3",
+        order: 3,
+        title: "Incubate to form RNP complex",
+        description: "Incubate the mixture at room temperature to allow RNP complex formation.",
+        duration: "15 min",
+      },
+      {
+        id: "ps4",
+        order: 4,
+        title: "Proceed to electroporation",
+        description: "Use the assembled RNP complex immediately, or store on ice for up to 30 minutes before nucleofection.",
+        duration: "—",
+      },
+    ],
+    usedIn: [
+      { experimentId: "EXP-2026-0142", experimentName: "CRISPR-Cas9 T-Cell Knockout", usedAt: "2h ago" },
+      { experimentId: "EXP-2026-0131", experimentName: "PD-1 Knockout — Ratio Optimization", usedAt: "3 weeks ago" },
+    ],
+    versionHistory: [
+      {
+        id: "v2",
+        version: "v2",
+        changeSummary: "Updated Cas9:sgRNA ratio guidance to 1:2.5 after efficiency drop pattern across 3 runs.",
+        author: "S. Chen",
+        date: "1 month ago",
+      },
+      {
+        id: "v1",
+        version: "v1",
+        changeSummary: "Initial protocol drafted from vendor nucleofection kit instructions.",
+        author: "S. Chen",
+        date: "4 months ago",
+      },
+    ],
+    aiInsight: {
+      title: "Ratio drift correlates with efficiency drops",
+      body: "Runs using a 1:2.5 Cas9:sgRNA ratio show 18% higher transfection efficiency on average than the original 1:2 guidance. Consider making 1:2.5 the default in the next version.",
+    },
   },
 };

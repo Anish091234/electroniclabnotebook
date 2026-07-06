@@ -5,7 +5,8 @@ import { AppLayout } from "./layouts/AppLayout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { ExperimentEditor } from "./pages/ExperimentEditor";
-import { Protocols } from "./pages/Protocols";
+import { ProtocolsList } from "./pages/ProtocolsList";
+import { ProtocolDetail } from "./pages/ProtocolDetail";
 import { Inventory } from "./pages/Inventory";
 import { Analytics } from "./pages/Analytics";
 import { Team } from "./pages/Team";
@@ -23,7 +24,8 @@ function App() {
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="experiments/:id" element={<ExperimentEditor />} />
-              <Route path="protocols" element={<Protocols />} />
+              <Route path="protocols" element={<ProtocolsList />} />
+              <Route path="protocols/:id" element={<ProtocolDetail />} />
               <Route path="inventory" element={<Inventory />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="team" element={<Team />} />

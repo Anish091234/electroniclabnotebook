@@ -1,0 +1,28 @@
+.category-tag {
+  font: 500 11px system-ui, sans-serif;
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.version-badge {
+  font: 600 10.5px var(--font-mono);
+  color: var(--color-text-muted);
+  background: var(--color-border-lighter);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.success-rate {
+  font: 600 11.5px system-ui, sans-serif;
+}
+
+.success-rate.high {
+  color: var(--color-success-text);
+}
+
+.success-rate.mid {
+  color: var(--color-warning-text);
+}
