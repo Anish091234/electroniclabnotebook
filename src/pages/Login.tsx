@@ -1,15 +1,16 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate, type Location } from "react-router-dom";
 import "./Login.css";
 import { LogoMark } from "../components/icons";
 import { useAuth } from "../contexts/AuthContext";
+import { getPendingInvite, rememberInviteFromSearch, type PendingInvite } from "../lib/pendingInvite";
 
 export function Login() {
-  const { isConfigured, login, loginWithApple, loginWithGoogle } = useAuth();
+  const { authError, clearAuthError, isConfigured, login, loginWithApple, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const inviteParams = new URLSearchParams(location.search);
-  const isInviteLogin = Boolean(inviteParams.get("labId") && inviteParams.get("invite") && inviteParams.get("inviteId"));
+  const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(() => getPendingInvite());
+  const isInviteLogin = Boolean(pendingInvite);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,8 +19,13 @@ export function Login() {
 
   const from = isInviteLogin ? "/dashboard" : (location.state as { from?: Location } | null)?.from?.pathname ?? "/dashboard";
 
+  useEffect(() => {
+    setPendingInvite(rememberInviteFromSearch(location.search) ?? getPendingInvite());
+  }, [location.search]);
+
   const runLogin = async (callback: () => Promise<void>) => {
     setError(null);
+    clearAuthError();
     setIsSubmitting(true);
     try {
       await callback();
@@ -57,8 +63,12 @@ export function Login() {
           </div>
         )}
 
-        {error && <div className="login-error">{error}</div>}
-        {isInviteLogin && <div className="login-info">After sign-in, LabOS will add this account to the invited lab.</div>}
+        {(error || authError) && <div className="login-error">{error || authError}</div>}
+        {isInviteLogin && (
+          <div className="login-info">
+            Invite link captured. Sign in or create an account with the invited email address to join the lab.
+          </div>
+        )}
 
         <div className="social-login-grid">
           <button

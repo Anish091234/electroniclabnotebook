@@ -74,6 +74,12 @@
   font: 700 10px system-ui, sans-serif;
 }
 
+.editor-lock-pill.muted {
+  background: var(--color-bg-subtle);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
 .editor-body {
   flex: 1;
   display: flex;
@@ -714,6 +720,13 @@
   color: var(--color-text-muted);
 }
 
+.authoring-template-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
 .authoring-block {
   background: var(--color-bg-subtle);
   border: 1px solid var(--color-border-strong);
@@ -726,6 +739,13 @@
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
+  align-items: flex-start;
+}
+
+.authoring-block-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .authoring-block-header strong {
@@ -739,16 +759,119 @@
   text-transform: uppercase;
 }
 
-.authoring-block pre {
-  margin: 0;
-  white-space: pre-wrap;
-  font: 400 11px/1.5 var(--font-mono);
+.authoring-block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.authoring-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-surface);
+}
+
+.authoring-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 420px;
+}
+
+.authoring-table th,
+.authoring-table td {
+  border-bottom: 1px solid var(--color-border-lighter);
+  border-right: 1px solid var(--color-border-lighter);
+  padding: 6px 7px;
+  text-align: left;
+  vertical-align: top;
+  font: 500 10.5px/1.35 system-ui, sans-serif;
   color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.authoring-table th {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+  font-weight: 800;
+}
+
+.authoring-checklist,
+.authoring-data-grid,
+.authoring-rich-text {
+  display: grid;
+  gap: 6px;
+}
+
+.authoring-checklist label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font: 500 11.5px system-ui, sans-serif;
+  color: var(--color-text-secondary);
+}
+
+.authoring-data-grid div {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.42fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border-lighter);
+}
+
+.authoring-data-grid dt,
+.authoring-data-grid dd {
+  margin: 0;
+  font: 500 11px/1.35 system-ui, sans-serif;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.authoring-data-grid dt {
+  color: var(--color-text-primary);
+  font-weight: 800;
+}
+
+.authoring-image-block {
+  display: grid;
+  gap: 6px;
+}
+
+.authoring-image-block img {
+  width: min(100%, 640px);
+  max-height: 360px;
+  object-fit: contain;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-surface);
+}
+
+.authoring-image-block span {
+  font: 600 10.5px system-ui, sans-serif;
+  color: var(--color-text-muted);
+}
+
+.authoring-equation {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-surface);
+  padding: 10px;
+  font: 700 15px/1.45 var(--font-mono);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.authoring-rich-text p {
+  margin: 0;
+  font: 400 11.5px/1.55 system-ui, sans-serif;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
 }
 
 .authoring-builder select,
 .authoring-builder input,
 .authoring-builder textarea,
+.review-panel input,
 .review-panel textarea {
   border: 1px solid var(--color-border-strong);
   border-radius: 6px;
@@ -756,6 +879,14 @@
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font: 400 12px/1.5 system-ui, sans-serif;
+}
+
+.authoring-required-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 700 10.5px system-ui, sans-serif;
+  color: var(--color-text-muted);
 }
 
 .review-row {
@@ -775,6 +906,26 @@
 .review-row strong {
   font: 700 11px system-ui, sans-serif;
   color: var(--color-text-primary);
+}
+
+.signing-blocker-box {
+  border: 1px solid var(--color-warning-border);
+  background: var(--color-warning-bg);
+  border-radius: 7px;
+  padding: 9px 10px;
+  display: grid;
+  gap: 5px;
+}
+
+.signing-blocker-box strong {
+  font: 800 10.5px system-ui, sans-serif;
+  color: var(--color-warning-text);
+  text-transform: uppercase;
+}
+
+.signing-blocker-box span {
+  font: 500 11px/1.35 system-ui, sans-serif;
+  color: var(--color-text-secondary);
 }
 
 @media (max-width: 980px) {

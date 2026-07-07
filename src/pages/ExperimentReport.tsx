@@ -1,6 +1,64 @@
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExperimentReport.css";
+import type { AuthoringBlock } from "../data/types";
 import { useLabData } from "../contexts/LabDataContext";
+import { parseChecklist, parseDelimitedRows, parseKeyValueRows } from "../lib/authoringBlocks";
+
+function renderReportBlock(block: AuthoringBlock) {
+  if (block.kind === "table") {
+    const rows = parseDelimitedRows(block.content);
+    const [header, ...body] = rows;
+    if (!header) return <p>No table rows.</p>;
+    return (
+      <table className="report-data-table">
+        <thead>
+          <tr>{header.map((cell, index) => <th key={`${block.id}-h-${index}`}>{cell || `Column ${index + 1}`}</th>)}</tr>
+        </thead>
+        <tbody>
+          {body.map((row, rowIndex) => (
+            <tr key={`${block.id}-r-${rowIndex}`}>
+              {header.map((_cell, cellIndex) => <td key={`${block.id}-${rowIndex}-${cellIndex}`}>{row[cellIndex] ?? ""}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  if (block.kind === "checklist") {
+    return (
+      <ul className="report-checklist">
+        {parseChecklist(block.content).map((item, index) => <li key={`${block.id}-c-${index}`}>{item.checked ? "[x]" : "[ ]"} {item.label}</li>)}
+      </ul>
+    );
+  }
+
+  if (block.kind === "data") {
+    return (
+      <table className="report-change-table">
+        <tbody>
+          {parseKeyValueRows(block.content).map((row, index) => (
+            <tr key={`${block.id}-d-${index}`}>
+              <th>{row.key}</th>
+              <td>{row.value || "Empty"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  if (block.kind === "image") {
+    const imageUrl = block.imageUrl || block.content;
+    return imageUrl ? <img className="report-block-image" src={imageUrl} alt={block.title} /> : <p>No image URL attached.</p>;
+  }
+
+  if (block.kind === "equation") {
+    return <div className="report-equation">{block.content}</div>;
+  }
+
+  return <p>{block.content || "Empty block."}</p>;
+}
 
 export function ExperimentReport() {
   const { id } = useParams<{ id: string }>();
@@ -67,8 +125,8 @@ export function ExperimentReport() {
           {detail.authoringBlocks.length === 0 && <p>No structured blocks.</p>}
           {detail.authoringBlocks.map((block) => (
             <div key={block.id} className="report-block">
-              <strong>{block.title} ({block.kind})</strong>
-              <pre>{block.content}</pre>
+              <strong>{block.title} ({block.kind}{block.required ? ", required" : ""})</strong>
+              {renderReportBlock(block)}
             </div>
           ))}
         </section>
@@ -108,6 +166,8 @@ export function ExperimentReport() {
         <section>
           <h2>Review and Signatures</h2>
           <p>Review status: {detail.reviewStatus ?? "none"}</p>
+          <p>Assigned reviewer: {detail.reviewAssignedToName || "Unassigned"}</p>
+          <p>Review due date: {detail.reviewDueDate || "No due date"}</p>
           {detail.reviewComment && <p>Review note: {detail.reviewComment}</p>}
           {detail.signatures.length === 0 && <p>No electronic signatures.</p>}
           {detail.signatures.map((signature) => (

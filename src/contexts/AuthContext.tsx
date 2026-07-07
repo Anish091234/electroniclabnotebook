@@ -12,6 +12,7 @@ import {
 import { auth, isFirebaseConfigured } from "../lib/firebase";
 import type { Lab, LabMember, UserProfile } from "../data/accountTypes";
 import { acceptLabInvite, ensureUserProfileAndLab } from "../services/accountService";
+import { clearPendingInvite, getPendingInvite } from "../lib/pendingInvite";
 
 interface AuthUser {
   uid: string;
@@ -31,6 +32,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isConfigured: boolean;
   isLoading: boolean;
+  authError: string | null;
+  clearAuthError: () => void;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   loginWithApple: () => Promise<void>;
@@ -66,23 +69,29 @@ function getAuthInstance() {
   return auth;
 }
 
-function pendingInviteFromLocation() {
-  if (typeof window === "undefined") return null;
-  const params = new URLSearchParams(window.location.search);
-  const labId = params.get("labId");
-  const inviteId = params.get("inviteId");
-  const token = params.get("invite");
-
-  return labId && inviteId && token ? { labId, inviteId, token } : null;
-}
-
 async function loadAccount(firebaseUser: User) {
-  const invite = pendingInviteFromLocation();
+  const invite = getPendingInvite();
   if (invite) {
-    return acceptLabInvite(firebaseUser, invite);
+    const account = await acceptLabInvite(firebaseUser, invite);
+    clearPendingInvite();
+    return account;
   }
 
   return ensureUserProfileAndLab(firebaseUser);
+}
+
+function friendlyAuthError(err: unknown) {
+  const message = err instanceof Error ? err.message : "Unable to load account.";
+  if (message.includes("invalid or has already been used")) {
+    return "This invite link is invalid, has already been accepted, or was opened with the wrong email address.";
+  }
+  if (message.includes("Invite link was not found")) {
+    return "This invite link was not found. Ask the lab owner to send a new invite.";
+  }
+  if (message.includes("Missing or insufficient permissions") || message.includes("permission-denied")) {
+    return "Firebase blocked this invite request. Deploy the latest Firestore rules, then try again.";
+  }
+  return message;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -91,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeLab, setActiveLab] = useState<Lab | null>(null);
   const [activeMember, setActiveMember] = useState<LabMember | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auth) {
@@ -115,6 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(account.profile);
         setActiveLab(account.lab);
         setActiveMember(account.member);
+        setAuthError(null);
+      } catch (err) {
+        setProfile(null);
+        setActiveLab(null);
+        setActiveMember(null);
+        setAuthError(friendlyAuthError(err));
+        await signOut(getAuthInstance());
       } finally {
         setIsLoading(false);
       }
@@ -170,12 +187,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !!user,
       isConfigured: isFirebaseConfigured,
       isLoading,
+      authError,
+      clearAuthError: () => setAuthError(null),
       login,
       loginWithGoogle,
       loginWithApple,
       logout,
     }),
-    [activeLab, activeMember, firebaseUser, isLoading, profile, user],
+    [activeLab, activeMember, authError, firebaseUser, isLoading, profile, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

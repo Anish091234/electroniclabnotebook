@@ -86,7 +86,14 @@ service cloud.firestore {
         allow create: if isLabAdmin(labId)
           || (signedIn() && uid == request.auth.uid && isSelfCreatedLab(labId))
           || (signedIn() && uid == request.auth.uid && canAcceptInvite(labId, request.resource.data));
-        allow update: if isLabAdmin(labId) || (signedIn() && uid == request.auth.uid);
+        allow update: if isLabAdmin(labId)
+          || (
+            signedIn()
+            && uid == request.auth.uid
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.piUid == resource.data.piUid
+          );
       }
 
       match /piGroups/{piUid} {

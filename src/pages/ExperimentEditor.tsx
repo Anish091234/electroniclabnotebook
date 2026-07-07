@@ -5,6 +5,8 @@ import { StatusBadge } from "../components/StatusBadge";
 import { CheckIcon } from "../components/icons";
 import type { AuthoringBlock, AuthoringBlockKind, ExperimentStatus, ProtocolStepStatus } from "../data/types";
 import { useLabData } from "../contexts/LabDataContext";
+import { useAuth } from "../contexts/AuthContext";
+import { AUTHORING_TEMPLATES, parseChecklist, parseDelimitedRows, parseKeyValueRows } from "../lib/authoringBlocks";
 
 type PanelTab = "ai" | "comments" | "history" | "files" | "review" | "tasks";
 type SaveState = "idle" | "saving" | "saved";
@@ -19,6 +21,7 @@ const STATUS_OPTIONS: { value: ExperimentStatus; label: string }[] = [
 export function ExperimentEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { activeMember, user } = useAuth();
   const {
     experimentDetails,
     protocolTemplates,
@@ -55,11 +58,15 @@ export function ExperimentEditor() {
   const [tagsDraft, setTagsDraft] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
   const [reviewDraft, setReviewDraft] = useState("");
+  const [reviewerName, setReviewerName] = useState("");
+  const [reviewDueDate, setReviewDueDate] = useState("");
   const [signatureDraft, setSignatureDraft] = useState("");
   const [amendmentDraft, setAmendmentDraft] = useState("");
   const [blockKind, setBlockKind] = useState<AuthoringBlockKind>("text");
   const [blockTitle, setBlockTitle] = useState("");
   const [blockContent, setBlockContent] = useState("");
+  const [blockRequired, setBlockRequired] = useState(false);
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [uploadState, setUploadState] = useState("");
 
@@ -86,8 +93,15 @@ export function ExperimentEditor() {
     setDueDate(detail.dueDate ?? "");
     setTagsDraft(detail.tags.join(", "));
     setReviewDraft(detail.reviewComment ?? "");
+    setReviewerName(detail.reviewAssignedToName ?? "");
+    setReviewDueDate(detail.reviewDueDate ?? "");
     setSignatureDraft("");
     setAmendmentDraft("");
+    setEditingBlockId(null);
+    setBlockKind("text");
+    setBlockTitle("");
+    setBlockContent("");
+    setBlockRequired(false);
     setSaveState("idle");
   }, [detail]);
 
@@ -104,6 +118,36 @@ export function ExperimentEditor() {
 
   const markDirty = () => setSaveState("idle");
   const isLocked = !!detail.locked;
+  const linkedProject = projectRecords.find((project) => project.id === detail.projectId);
+  const projectAllowsCurrentUser =
+    !linkedProject ||
+    linkedProject.visibility !== "restricted" ||
+    linkedProject.ownerUid === user?.uid ||
+    (linkedProject.allowedMemberUids ?? []).includes(user?.uid ?? "");
+  const canEditExperiment =
+    !isLocked &&
+    !!activeMember &&
+    activeMember.status === "active" &&
+    activeMember.role !== "viewer" &&
+    activeMember.role !== "external" &&
+    projectAllowsCurrentUser &&
+    (activeMember.role === "owner" ||
+      activeMember.role === "admin" ||
+      detail.ownerUid === activeMember.uid ||
+      detail.piUid === activeMember.uid ||
+      linkedProject?.ownerUid === activeMember.uid ||
+      (linkedProject?.allowedMemberUids ?? []).includes(activeMember.uid));
+  const canReviewExperiment = !!activeMember && ["owner", "admin", "pi"].includes(activeMember.role);
+  const isReadOnly = isLocked || !canEditExperiment;
+  const signingIssues = [
+    !detail.objective.trim() ? "Objective is missing" : "",
+    !detail.notes.trim() ? "Notebook notes are missing" : "",
+    !detail.observations.trim() ? "Observations are missing" : "",
+    detail.attachmentIds.length === 0 ? "Raw files are not attached" : "",
+    detail.protocol.some((step) => step.required !== false && step.status !== "done") ? "Required protocol steps are incomplete" : "",
+    detail.protocol.some((step) => step.required !== false && !step.reagentLotId) ? "Required reagent lots are not linked" : "",
+    detail.authoringBlocks.some((block) => block.required && !block.content.trim()) ? "Required structured blocks are incomplete" : "",
+  ].filter(Boolean);
 
   const cycleStatus = (current: ProtocolStepStatus): ProtocolStepStatus => {
     if (current === "pending") return "in_progress";
@@ -112,12 +156,12 @@ export function ExperimentEditor() {
   };
 
   const toggleStep = async (stepId: string, currentStatus: ProtocolStepStatus) => {
-    if (isLocked) return;
+    if (isReadOnly) return;
     await updateProtocolStepStatus(detail.id, stepId, cycleStatus(currentStatus));
   };
 
   const handleSave = async () => {
-    if (isLocked) return;
+    if (isReadOnly) return;
     setSaveState("saving");
     await saveExperiment(detail.id, {
       name: title,
@@ -147,20 +191,150 @@ export function ExperimentEditor() {
     setPanelTab("files");
   };
 
-  const addAuthoringBlock = async () => {
+  const resetBlockForm = () => {
+    setEditingBlockId(null);
+    setBlockKind("text");
+    setBlockTitle("");
+    setBlockContent("");
+    setBlockRequired(false);
+  };
+
+  const saveAuthoringBlock = async () => {
     if (!blockTitle.trim() && !blockContent.trim()) return;
     const timestamp = new Date().toISOString();
     const block: AuthoringBlock = {
-      id: `block-${Date.now()}`,
+      id: editingBlockId ?? `block-${Date.now()}`,
       kind: blockKind,
       title: blockTitle.trim() || blockKind,
       content: blockContent,
-      createdAt: timestamp,
+      required: blockRequired,
+      createdAt: detail.authoringBlocks.find((item) => item.id === editingBlockId)?.createdAt ?? timestamp,
       updatedAt: timestamp,
     };
-    await saveAuthoringBlocks(detail.id, [...detail.authoringBlocks, block]);
-    setBlockTitle("");
-    setBlockContent("");
+    const nextBlocks = editingBlockId
+      ? detail.authoringBlocks.map((item) => (item.id === editingBlockId ? { ...item, ...block } : item))
+      : [...detail.authoringBlocks, block];
+    await saveAuthoringBlocks(detail.id, nextBlocks);
+    resetBlockForm();
+  };
+
+  const editAuthoringBlock = (block: AuthoringBlock) => {
+    setEditingBlockId(block.id);
+    setBlockKind(block.kind);
+    setBlockTitle(block.title);
+    setBlockContent(block.content);
+    setBlockRequired(!!block.required);
+  };
+
+  const deleteAuthoringBlock = async (blockId: string) => {
+    await saveAuthoringBlocks(detail.id, detail.authoringBlocks.filter((block) => block.id !== blockId));
+    if (editingBlockId === blockId) resetBlockForm();
+  };
+
+  const addTemplateBlock = async (templateIndex: number) => {
+    const template = AUTHORING_TEMPLATES[templateIndex];
+    if (!template) return;
+    const timestamp = new Date().toISOString();
+    await saveAuthoringBlocks(detail.id, [
+      ...detail.authoringBlocks,
+      {
+        id: `block-${Date.now()}`,
+        kind: template.kind,
+        title: template.title,
+        content: template.content,
+        required: template.required,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ]);
+  };
+
+  const handleInlineImageUpload = async (file: File | undefined) => {
+    if (!file) return;
+    const record = await uploadAttachment(detail.id, file);
+    const timestamp = new Date().toISOString();
+    await saveAuthoringBlocks(detail.id, [
+      ...detail.authoringBlocks,
+      {
+        id: `block-${Date.now()}`,
+        kind: "image",
+        title: file.name,
+        content: record.downloadURL,
+        attachmentId: record.id,
+        fileName: record.fileName,
+        imageUrl: record.downloadURL,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ]);
+  };
+
+  const renderAuthoringBlock = (block: AuthoringBlock) => {
+    if (block.kind === "table") {
+      const rows = parseDelimitedRows(block.content);
+      if (rows.length === 0) return <p className="authoring-empty">No table rows.</p>;
+      const [header, ...body] = rows;
+      return (
+        <div className="authoring-table-wrap">
+          <table className="authoring-table">
+            <thead>
+              <tr>{header.map((cell, index) => <th key={`${block.id}-h-${index}`}>{cell || `Column ${index + 1}`}</th>)}</tr>
+            </thead>
+            <tbody>
+              {body.map((row, rowIndex) => (
+                <tr key={`${block.id}-r-${rowIndex}`}>
+                  {header.map((_cell, cellIndex) => <td key={`${block.id}-r-${rowIndex}-${cellIndex}`}>{row[cellIndex] ?? ""}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (block.kind === "checklist") {
+      const items = parseChecklist(block.content);
+      return (
+        <div className="authoring-checklist">
+          {items.map((item, index) => (
+            <label key={`${block.id}-check-${index}`}>
+              <input type="checkbox" checked={item.checked} readOnly />
+              <span>{item.label}</span>
+            </label>
+          ))}
+        </div>
+      );
+    }
+
+    if (block.kind === "data") {
+      const rows = parseKeyValueRows(block.content);
+      return (
+        <dl className="authoring-data-grid">
+          {rows.map((row, index) => (
+            <div key={`${block.id}-data-${index}`}>
+              <dt>{row.key}</dt>
+              <dd>{row.value || "Empty"}</dd>
+            </div>
+          ))}
+        </dl>
+      );
+    }
+
+    if (block.kind === "image") {
+      const imageUrl = block.imageUrl || block.content;
+      return (
+        <div className="authoring-image-block">
+          {imageUrl ? <img src={imageUrl} alt={block.title} /> : <p className="authoring-empty">No image URL attached.</p>}
+          {block.fileName && <span>{block.fileName}</span>}
+        </div>
+      );
+    }
+
+    if (block.kind === "equation") {
+      return <div className="authoring-equation">{block.content}</div>;
+    }
+
+    return <div className="authoring-rich-text">{block.content.split(/\n{2,}/).map((paragraph, index) => <p key={`${block.id}-p-${index}`}>{paragraph}</p>)}</div>;
   };
 
   const startAmendment = async () => {
@@ -183,12 +357,13 @@ export function ExperimentEditor() {
         <div className="editor-topbar-actions">
           <StatusBadge status={status} />
           {isLocked && <span className="editor-lock-pill">Signed / Locked</span>}
-          {!isLocked && (
-            <button className="btn-secondary" onClick={() => submitExperimentForReview(detail.id, reviewDraft)}>
+          {!isLocked && !canEditExperiment && <span className="editor-lock-pill muted">Read Only</span>}
+          {!isReadOnly && (
+            <button className="btn-secondary" onClick={() => submitExperimentForReview(detail.id, reviewDraft, null, reviewerName || null, reviewDueDate || null)}>
               Submit Review
             </button>
           )}
-          {!isLocked && detail.reviewStatus === "requested" && (
+          {!isLocked && canReviewExperiment && detail.reviewStatus === "requested" && (
             <>
               <button className="btn-secondary" onClick={() => approveExperimentReview(detail.id, reviewDraft)}>
                 Approve
@@ -198,8 +373,8 @@ export function ExperimentEditor() {
               </button>
             </>
           )}
-          {!isLocked && (
-            <button className="btn-secondary" onClick={() => signExperiment(detail.id, "author", signatureDraft || "Signed as complete and accurate.")}>
+          {!isReadOnly && (
+            <button className="btn-secondary" disabled={signingIssues.length > 0} onClick={() => signExperiment(detail.id, "author", signatureDraft || "Signed as complete and accurate.")}>
               E-Sign
             </button>
           )}
@@ -211,7 +386,7 @@ export function ExperimentEditor() {
           <button className="btn-secondary" onClick={() => navigate(`/experiments/${detail.id}/report`)}>
             Print Report
           </button>
-          <button className="btn-save" disabled={isLocked} onClick={handleSave}>
+          <button className="btn-save" disabled={isReadOnly} onClick={handleSave}>
             {saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Save"}
           </button>
         </div>
@@ -222,7 +397,7 @@ export function ExperimentEditor() {
           <input
             className="editor-title-input"
             value={title}
-            disabled={isLocked}
+            disabled={isReadOnly}
             onChange={(e) => {
               setTitle(e.target.value);
               markDirty();
@@ -246,7 +421,7 @@ export function ExperimentEditor() {
               <span>Status</span>
               <select
                 value={status}
-                disabled={isLocked}
+                disabled={isReadOnly}
                 onChange={(e) => {
                   setStatus(e.target.value as ExperimentStatus);
                   markDirty();
@@ -263,7 +438,7 @@ export function ExperimentEditor() {
               <span>Tags</span>
               <input
                 value={tagsDraft}
-                disabled={isLocked}
+                disabled={isReadOnly}
                 onChange={(e) => {
                   setTagsDraft(e.target.value);
                   markDirty();
@@ -275,7 +450,7 @@ export function ExperimentEditor() {
               <span>Project</span>
               <select
                 value={projectId}
-                disabled={isLocked}
+                disabled={isReadOnly}
                 onChange={(e) => {
                   setProjectId(e.target.value);
                   markDirty();
@@ -293,7 +468,7 @@ export function ExperimentEditor() {
               <span>Notebook</span>
               <input
                 value={notebook}
-                disabled={isLocked}
+                disabled={isReadOnly}
                 onChange={(e) => {
                   setNotebook(e.target.value);
                   markDirty();
@@ -305,7 +480,7 @@ export function ExperimentEditor() {
               <input
                 type="date"
                 value={dueDate}
-                disabled={isLocked}
+                disabled={isReadOnly}
                 onChange={(e) => {
                   setDueDate(e.target.value);
                   markDirty();
@@ -319,7 +494,7 @@ export function ExperimentEditor() {
               <span>Protocol</span>
               <select
                 value={detail.protocolTemplateId ?? ""}
-                disabled={isLocked}
+                disabled={isReadOnly}
                 onChange={(e) => e.target.value && attachProtocolTemplate(detail.id, e.target.value)}
               >
                 <option value="">Default checklist</option>
@@ -334,7 +509,11 @@ export function ExperimentEditor() {
             </label>
             <label className="toolbar-ai-btn file-upload-btn">
               {uploadState || "Upload File"}
-              <input type="file" disabled={isLocked} onChange={(e) => handleUpload(e.target.files?.[0])} />
+              <input type="file" disabled={isReadOnly} onChange={(e) => handleUpload(e.target.files?.[0])} />
+            </label>
+            <label className="toolbar-ai-btn file-upload-btn">
+              Inline Image
+              <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleInlineImageUpload(e.target.files?.[0])} />
             </label>
           </div>
 
@@ -343,7 +522,7 @@ export function ExperimentEditor() {
             <textarea
               className="objective-textarea"
               value={objective}
-              disabled={isLocked}
+              disabled={isReadOnly}
               onChange={(e) => {
                 setObjective(e.target.value);
                 markDirty();
@@ -354,7 +533,7 @@ export function ExperimentEditor() {
             <textarea
               className="objective-textarea"
               value={notes}
-              disabled={isLocked}
+              disabled={isReadOnly}
               onChange={(e) => {
                 setNotes(e.target.value);
                 markDirty();
@@ -366,7 +545,7 @@ export function ExperimentEditor() {
             <textarea
               className="objective-textarea"
               value={observations}
-              disabled={isLocked}
+              disabled={isReadOnly}
               onChange={(e) => {
                 setObservations(e.target.value);
                 markDirty();
@@ -375,19 +554,34 @@ export function ExperimentEditor() {
               placeholder="Results, anomalies, images reviewed, and interpretation..."
             />
             <h3>Structured Blocks</h3>
+            <div className="authoring-template-row">
+              {AUTHORING_TEMPLATES.map((template, index) => (
+                <button key={template.label} className="btn-secondary" type="button" disabled={isReadOnly} onClick={() => addTemplateBlock(index)}>
+                  {template.label}
+                </button>
+              ))}
+            </div>
             <div className="authoring-block-list">
               {detail.authoringBlocks.length === 0 && <p className="authoring-empty">No rich blocks yet.</p>}
               {detail.authoringBlocks.map((block) => (
                 <div key={block.id} className="authoring-block">
                   <div className="authoring-block-header">
-                    <strong>{block.title}</strong>
-                    <span>{block.kind}</span>
+                    <div>
+                      <strong>{block.title}</strong>
+                      <span>{block.kind}{block.required ? " required" : ""}</span>
+                    </div>
+                    {!isReadOnly && (
+                      <div className="authoring-block-actions">
+                        <button className="btn-secondary" type="button" onClick={() => editAuthoringBlock(block)}>Edit</button>
+                        <button className="btn-secondary" type="button" onClick={() => deleteAuthoringBlock(block.id)}>Delete</button>
+                      </div>
+                    )}
                   </div>
-                  <pre>{block.content}</pre>
+                  {renderAuthoringBlock(block)}
                 </div>
               ))}
             </div>
-            {!isLocked && (
+            {!isReadOnly && (
               <div className="authoring-builder">
                 <select value={blockKind} onChange={(e) => setBlockKind(e.target.value as AuthoringBlockKind)}>
                   <option value="text">Text</option>
@@ -398,8 +592,15 @@ export function ExperimentEditor() {
                   <option value="data">Structured Data</option>
                 </select>
                 <input value={blockTitle} onChange={(e) => setBlockTitle(e.target.value)} placeholder="Block title" />
+                <label className="authoring-required-toggle">
+                  <input type="checkbox" checked={blockRequired} onChange={(e) => setBlockRequired(e.target.checked)} />
+                  Required before signing
+                </label>
                 <textarea value={blockContent} onChange={(e) => setBlockContent(e.target.value)} rows={3} placeholder="Paste table data, equation, checklist, or structured observations..." />
-                <button className="btn-secondary" type="button" onClick={addAuthoringBlock}>Add Block</button>
+                <div className="workbench-actions">
+                  <button className="btn-secondary" type="button" onClick={saveAuthoringBlock}>{editingBlockId ? "Save Block" : "Add Block"}</button>
+                  {editingBlockId && <button className="btn-secondary" type="button" onClick={resetBlockForm}>Cancel Edit</button>}
+                </div>
               </div>
             )}
             <h3>Protocol Steps</h3>
@@ -416,7 +617,7 @@ export function ExperimentEditor() {
                     <select
                       className="step-lot-select"
                       value={step.reagentLotId ?? ""}
-                      disabled={isLocked}
+                      disabled={isReadOnly}
                       onChange={(e) => linkProtocolStepLot(detail.id, step.id, e.target.value || null)}
                     >
                       <option value="">No lot linked</option>
@@ -438,7 +639,7 @@ export function ExperimentEditor() {
                       <input
                         type="checkbox"
                         checked={step.required !== false}
-                        disabled={isLocked}
+                        disabled={isReadOnly}
                         onChange={(e) => updateProtocolStepDetails(detail.id, step.id, { required: e.target.checked })}
                       />
                       Required
@@ -449,23 +650,23 @@ export function ExperimentEditor() {
                         type="number"
                         min={0}
                         defaultValue={step.timerMinutes ?? 0}
-                        disabled={isLocked}
+                        disabled={isReadOnly}
                         onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { timerMinutes: Number(e.target.value) })}
                       />
                     </label>
                     <input
                       defaultValue={step.note ?? ""}
-                      disabled={isLocked}
+                      disabled={isReadOnly}
                       placeholder="Step note"
                       onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { note: e.target.value })}
                     />
                     <input
                       defaultValue={step.deviation ?? ""}
-                      disabled={isLocked}
+                      disabled={isReadOnly}
                       placeholder="Deviation"
                       onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { deviation: e.target.value })}
                     />
-                    {!isLocked && (
+                    {!isReadOnly && (
                       <label className="step-file-upload">
                         Step file
                         <input type="file" onChange={(e) => handleUpload(e.target.files?.[0], step.id)} />
@@ -514,8 +715,18 @@ export function ExperimentEditor() {
               <div className="review-panel">
                 <div className="review-row"><span>Status</span><strong>{detail.reviewStatus ?? "none"}</strong></div>
                 <div className="review-row"><span>Requested</span><strong>{detail.reviewRequestedBy || "Not requested"}</strong></div>
-                <textarea value={reviewDraft} disabled={isLocked} onChange={(e) => setReviewDraft(e.target.value)} placeholder="Review note or rejection reason..." rows={4} />
-                <textarea value={signatureDraft} disabled={isLocked} onChange={(e) => setSignatureDraft(e.target.value)} placeholder="Signature meaning/comment..." rows={3} />
+                <div className="review-row"><span>Reviewer</span><strong>{detail.reviewAssignedToName || "Unassigned"}</strong></div>
+                <div className="review-row"><span>Due</span><strong>{detail.reviewDueDate || "No due date"}</strong></div>
+                {signingIssues.length > 0 && (
+                  <div className="signing-blocker-box">
+                    <strong>Signing Blockers</strong>
+                    {signingIssues.map((issue) => <span key={issue}>{issue}</span>)}
+                  </div>
+                )}
+                <input value={reviewerName} disabled={isReadOnly} onChange={(e) => setReviewerName(e.target.value)} placeholder="Assigned reviewer name" />
+                <input type="date" value={reviewDueDate} disabled={isReadOnly} onChange={(e) => setReviewDueDate(e.target.value)} />
+                <textarea value={reviewDraft} disabled={isReadOnly && !canReviewExperiment} onChange={(e) => setReviewDraft(e.target.value)} placeholder="Review note or rejection reason..." rows={4} />
+                <textarea value={signatureDraft} disabled={isReadOnly} onChange={(e) => setSignatureDraft(e.target.value)} placeholder="Signature meaning/comment..." rows={3} />
                 {isLocked && <textarea value={amendmentDraft} onChange={(e) => setAmendmentDraft(e.target.value)} placeholder="Amendment reason..." rows={3} />}
                 <h3>Signatures</h3>
                 {detail.signatures.length === 0 && <p>No signatures yet.</p>}

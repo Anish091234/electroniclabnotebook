@@ -36,6 +36,10 @@ function createInviteToken() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+function cleanOrigin(value: string) {
+  return value.trim().replace(/\/+$/, "");
+}
+
 function fallbackDisplayName(user: User) {
   return user.displayName || user.email?.split("@")[0] || "New researcher";
 }
@@ -202,7 +206,8 @@ export async function createLabInvite(input: {
   const normalizedEmail = input.email.trim().toLowerCase();
   const inviteRef = doc(collection(firestore, "labs", input.labId, "invites"));
   const token = createInviteToken();
-  const inviteUrl = `${input.appOrigin}/login?invite=${encodeURIComponent(token)}&inviteId=${encodeURIComponent(inviteRef.id)}&labId=${encodeURIComponent(input.labId)}`;
+  const appOrigin = cleanOrigin(input.appOrigin);
+  const inviteUrl = `${appOrigin}/login?invite=${encodeURIComponent(token)}&inviteId=${encodeURIComponent(inviteRef.id)}&labId=${encodeURIComponent(input.labId)}`;
   const invite: LabInvite = {
     id: inviteRef.id,
     email: normalizedEmail,
@@ -347,6 +352,18 @@ export async function addLabMember(input: {
       createdAt: timestamp,
     });
   }
+}
+
+export async function updateLabMember(
+  labId: string,
+  uid: string,
+  patch: Partial<Pick<LabMember, "role" | "status" | "piUid" | "displayName">>,
+) {
+  const firestore = requireDb();
+  await updateDoc(doc(firestore, "labs", labId, "members", uid), {
+    ...patch,
+    updatedAt: nowIso(),
+  });
 }
 
 export async function setDefaultLab(uid: string, labId: string) {

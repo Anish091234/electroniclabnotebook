@@ -81,6 +81,10 @@ export interface AuthoringBlock {
   kind: AuthoringBlockKind;
   title: string;
   content: string;
+  required?: boolean;
+  attachmentId?: string | null;
+  fileName?: string | null;
+  imageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -127,6 +131,9 @@ export interface ExperimentDetail extends Experiment {
   reviewRequestedBy?: string | null;
   reviewDecisionAt?: string | null;
   reviewDecisionBy?: string | null;
+  reviewAssignedToUid?: string | null;
+  reviewAssignedToName?: string | null;
+  reviewDueDate?: string | null;
   reviewComment?: string | null;
   lockedAt?: string | null;
   lockedBy?: string | null;
@@ -300,12 +307,18 @@ export interface SaveSampleInput {
 }
 
 export type ProjectStatus = "active" | "paused" | "archived";
+export type ProjectVisibility = "lab" | "restricted" | "read_only_link";
 
 export interface ProjectRecord {
   id: string;
   name: string;
   description: string;
   status: ProjectStatus;
+  visibility: ProjectVisibility;
+  allowedMemberUids: string[];
+  readOnlyShareEnabled: boolean;
+  shareToken?: string | null;
+  shareCreatedAt?: string | null;
   ownerUid: string;
   ownerName: string;
   notebooks: string[];
@@ -320,6 +333,9 @@ export interface SaveProjectInput {
   name: string;
   description: string;
   status: ProjectStatus;
+  visibility?: ProjectVisibility;
+  allowedMemberUids?: string[];
+  readOnlyShareEnabled?: boolean;
   notebooks: string[];
   folders: string[];
   tags: string[];
@@ -372,6 +388,11 @@ export interface IntegrationImport {
   fileName: string;
   rowCount: number;
   summary: string;
+  importType?: "inventory" | "experiment-data" | "instrument" | "unknown";
+  columns?: string[];
+  previewRows?: string[][];
+  mapping?: Record<string, string>;
+  validationIssues?: string[];
   createdBy: string;
   createdAt: string;
 }

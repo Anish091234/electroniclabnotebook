@@ -68,8 +68,8 @@ interface LabDataContextValue extends LabDataState {
   updateProtocolStepStatus: (experimentId: string, stepId: string, status: ProtocolStep["status"]) => Promise<void>;
   linkProtocolStepLot: (experimentId: string, stepId: string, lotId: string | null) => Promise<void>;
   addComment: (experimentId: string, body: string) => Promise<void>;
-  uploadAttachment: (experimentId: string, file: File, protocolStepId?: string | null) => Promise<void>;
-  submitExperimentForReview: (experimentId: string, comment?: string) => Promise<void>;
+  uploadAttachment: (experimentId: string, file: File, protocolStepId?: string | null) => Promise<AttachmentRecord>;
+  submitExperimentForReview: (experimentId: string, comment?: string, reviewerUid?: string | null, reviewerName?: string | null, reviewDueDate?: string | null) => Promise<void>;
   approveExperimentReview: (experimentId: string, comment?: string) => Promise<void>;
   rejectExperimentReview: (experimentId: string, comment: string) => Promise<void>;
   signExperiment: (experimentId: string, meaning: "author" | "reviewer" | "approver", comment: string) => Promise<void>;
@@ -85,7 +85,10 @@ interface LabDataContextValue extends LabDataState {
   createTask: (input: SaveTaskInput) => Promise<void>;
   updateTaskStatus: (taskId: string, status: CollaborationTask["status"]) => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
-  recordIntegrationImport: (input: Pick<IntegrationImport, "source" | "fileName" | "rowCount" | "summary">) => Promise<void>;
+  recordIntegrationImport: (
+    input: Pick<IntegrationImport, "source" | "fileName" | "rowCount" | "summary"> &
+      Partial<Pick<IntegrationImport, "importType" | "columns" | "previewRows" | "mapping" | "validationIssues">>,
+  ) => Promise<void>;
 }
 
 const LabDataContext = createContext<LabDataContextValue | undefined>(undefined);
@@ -121,6 +124,11 @@ function shortTime(value = new Date()) {
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function createShareToken() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
 }
 
 function normalizeTags(tags: string[]) {
@@ -248,6 +256,9 @@ function normalizedDetail(detail: ExperimentDetail): ExperimentDetail {
     reviewRequestedBy: detail.reviewRequestedBy ?? null,
     reviewDecisionAt: detail.reviewDecisionAt ?? null,
     reviewDecisionBy: detail.reviewDecisionBy ?? null,
+    reviewAssignedToUid: detail.reviewAssignedToUid ?? null,
+    reviewAssignedToName: detail.reviewAssignedToName ?? null,
+    reviewDueDate: detail.reviewDueDate ?? null,
     reviewComment: detail.reviewComment ?? null,
     lockedAt: detail.lockedAt ?? null,
     lockedBy: detail.lockedBy ?? null,
@@ -268,11 +279,25 @@ function createHistoryEntry(actor: string, actorUid: string, deviceIdentity: Cli
   };
 }
 
-function mockInsights(detail: Pick<ExperimentDetail, "protocol" | "status" | "objective" | "attachmentIds" | "reviewStatus" | "locked">): AIInsight[] {
+function mockInsights(
+  detail: Pick<
+    ExperimentDetail,
+    "protocol" | "status" | "objective" | "notes" | "observations" | "attachmentIds" | "reviewStatus" | "locked" | "authoringBlocks" | "versions" | "reviewDueDate"
+  >,
+): AIInsight[] {
   const done = detail.protocol.filter((step) => step.status === "done").length;
   const total = Math.max(detail.protocol.length, 1);
   const missingLots = detail.protocol.filter((step) => step.required !== false && !step.reagentLotId).length;
   const deviations = detail.protocol.filter((step) => step.deviation?.trim()).length;
+  const missingFields = [
+    !detail.objective.trim() ? "objective" : "",
+    !detail.notes.trim() ? "notebook notes" : "",
+    !detail.observations.trim() ? "observations" : "",
+    detail.attachmentIds.length === 0 ? "raw files" : "",
+    detail.authoringBlocks.filter((block) => block.required && !block.content.trim()).length > 0 ? "required structured blocks" : "",
+  ].filter(Boolean);
+  const overdueReview = detail.reviewDueDate ? Date.parse(detail.reviewDueDate) < Date.now() && detail.reviewStatus === "requested" : false;
+  const recentChange = detail.versions.at(-1);
   return [
     {
       id: "ai-progress",
@@ -291,6 +316,24 @@ function mockInsights(detail: Pick<ExperimentDetail, "protocol" | "status" | "ob
       kind: deviations > 0 ? "suggestion" : "success",
       title: deviations > 0 ? "Deviation review needed" : "No deviations recorded",
       body: deviations > 0 ? `${deviations} protocol deviations should be explained before signing.` : "No protocol deviations are currently recorded.",
+    },
+    {
+      id: "ai-missing-data",
+      kind: missingFields.length > 0 ? "alert" : "success",
+      title: missingFields.length > 0 ? "Signing blockers detected" : "Required record fields present",
+      body: missingFields.length > 0 ? `Before signing, complete: ${missingFields.join(", ")}.` : "Objective, notes, observations, files, and required blocks are present.",
+    },
+    {
+      id: "ai-last-change",
+      kind: recentChange ? "suggestion" : "success",
+      title: recentChange ? "What changed most recently" : "No revisions yet",
+      body: recentChange ? recentChange.snapshotSummary : "Revision history will summarize field-level edits as they happen.",
+    },
+    {
+      id: "ai-review-due",
+      kind: overdueReview ? "alert" : "suggestion",
+      title: overdueReview ? "Review overdue" : "Review timing",
+      body: detail.reviewDueDate ? `Review due date: ${detail.reviewDueDate}.` : "Assign a reviewer and due date when submitting for review.",
     },
     {
       id: "ai-review",
@@ -424,6 +467,15 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
     }
 
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
+    const handleSnapshotError = (error: Error) => {
+      setState((prev) => ({
+        ...prev,
+        isLoading: false,
+        error: error.message.includes("Missing or insufficient permissions") || error.message.includes("permission-denied")
+          ? "Firebase permissions denied this lab data request. Deploy the Firestore rules from this repo to your Firebase project."
+          : error.message,
+      }));
+    };
     const unsubscribers = [
       onSnapshot(query(pathFor(activeLab.id, "experiments"), orderBy("modifiedAt", "desc")), (snapshot) => {
         const details = snapshot.docs.map((item) => normalizedDetail(item.data() as ExperimentDetail));
@@ -433,50 +485,50 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           experimentDetails: Object.fromEntries(details.map((detail) => [detail.id, { ...detail, aiInsights: mockInsights(detail) }])),
           isLoading: false,
         }));
-      }),
+      }, handleSnapshotError),
       onSnapshot(query(pathFor(activeLab.id, "protocolTemplates"), orderBy("updatedAt", "desc")), (snapshot) => {
         setState((prev) => ({ ...prev, protocolTemplates: snapshot.docs.map((item) => item.data() as ProtocolTemplate) }));
-      }),
+      }, handleSnapshotError),
       onSnapshot(query(pathFor(activeLab.id, "inventoryItems"), orderBy("updatedAt", "desc")), (snapshot) => {
         setState((prev) => ({ ...prev, inventoryItems: snapshot.docs.map((item) => item.data() as InventoryItem) }));
-      }),
+      }, handleSnapshotError),
       onSnapshot(pathFor(activeLab.id, "sampleRecords"), (snapshot) => {
         const records = snapshot.docs
           .map((item) => item.data() as SampleRecord)
           .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
         setState((prev) => ({ ...prev, sampleRecords: records }));
-      }),
+      }, handleSnapshotError),
       onSnapshot(pathFor(activeLab.id, "projectRecords"), (snapshot) => {
         const records = snapshot.docs
           .map((item) => item.data() as ProjectRecord)
           .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
         setState((prev) => ({ ...prev, projectRecords: records }));
-      }),
+      }, handleSnapshotError),
       onSnapshot(pathFor(activeLab.id, "notifications"), (snapshot) => {
         const records = snapshot.docs
           .map((item) => item.data() as NotificationRecord)
           .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
         setState((prev) => ({ ...prev, notifications: records }));
-      }),
+      }, handleSnapshotError),
       onSnapshot(pathFor(activeLab.id, "collaborationTasks"), (snapshot) => {
         const records = snapshot.docs
           .map((item) => item.data() as CollaborationTask)
           .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
         setState((prev) => ({ ...prev, collaborationTasks: records }));
-      }),
+      }, handleSnapshotError),
       onSnapshot(pathFor(activeLab.id, "integrationImports"), (snapshot) => {
         const records = snapshot.docs
           .map((item) => item.data() as IntegrationImport)
           .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
         setState((prev) => ({ ...prev, integrationImports: records }));
-      }),
+      }, handleSnapshotError),
       onSnapshot(pathFor(activeLab.id, "auditEvents"), (snapshot) => {
         const events = snapshot.docs.map((item) => item.data() as AuditEvent).sort((a, b) => eventTime(b) - eventTime(a));
         setState((prev) => ({ ...prev, auditEvents: events }));
-      }),
+      }, handleSnapshotError),
       onSnapshot(query(pathFor(activeLab.id, "attachments"), orderBy("uploadedAt", "desc")), (snapshot) => {
         setState((prev) => ({ ...prev, attachments: snapshot.docs.map((item) => item.data() as AttachmentRecord) }));
-      }),
+      }, handleSnapshotError),
     ];
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -554,6 +606,9 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           reviewRequestedBy: null,
           reviewDecisionAt: null,
           reviewDecisionBy: null,
+          reviewAssignedToUid: null,
+          reviewAssignedToName: null,
+          reviewDueDate: null,
           reviewComment: null,
           lockedAt: null,
           lockedBy: null,
@@ -821,6 +876,16 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           fieldChanges,
           versionNumber: changePatch.revision.revisionNumber,
         });
+        if (body.includes("@")) {
+          await createNotification({
+            kind: "comment",
+            title: "Mention in comment",
+            body: `${actor} mentioned someone on ${detail.name}: ${body.trim().slice(0, 140)}`,
+            targetType: "experiment",
+            targetId: experimentId,
+            priority: "normal",
+          });
+        }
       },
       uploadAttachment: async (experimentId, file, protocolStepId = null) => {
         if (!labId) throw new Error("No active lab");
@@ -876,8 +941,9 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           fieldChanges,
           versionNumber: changePatch.revision.revisionNumber,
         });
+        return record;
       },
-      submitExperimentForReview: async (experimentId, comment = "") => {
+      submitExperimentForReview: async (experimentId, comment = "", reviewerUid = null, reviewerName = null, reviewDueDate = null) => {
         if (!labId) throw new Error("No active lab");
         const detail = state.experimentDetails[experimentId];
         if (!detail) return;
@@ -888,6 +954,8 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           fieldChange("Review status", detail.reviewStatus, "requested"),
           fieldChange("Review requested by", detail.reviewRequestedBy, actor),
           fieldChange("Review note", detail.reviewComment, comment.trim() || null),
+          fieldChange("Assigned reviewer", detail.reviewAssignedToName, reviewerName),
+          fieldChange("Review due date", detail.reviewDueDate, reviewDueDate),
         ].filter((change): change is AuditFieldChange => Boolean(change));
         const changePatch = experimentChangePatch(detail, actor, actorUid, deviceIdentity, "Submitted for PI review", fieldChanges, timestamp);
         await updateDoc(docFor(labId, "experiments", experimentId), {
@@ -895,6 +963,9 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           reviewStatus: "requested",
           reviewRequestedAt: timestamp,
           reviewRequestedBy: actor,
+          reviewAssignedToUid: reviewerUid,
+          reviewAssignedToName: reviewerName,
+          reviewDueDate,
           reviewComment: comment.trim() || null,
           modified: "Just now",
           modifiedAt: timestamp,
@@ -905,7 +976,7 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
         await createNotification({
           kind: "review",
           title: "Experiment ready for review",
-          body: `${actor} submitted ${detail.name} for PI review.`,
+          body: reviewerName ? `${actor} assigned ${detail.name} to ${reviewerName} for review.` : `${actor} submitted ${detail.name} for PI review.`,
           targetType: "experiment",
           targetId: experimentId,
           priority: "high",
@@ -1102,6 +1173,9 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           reviewRequestedBy: null,
           reviewDecisionAt: null,
           reviewDecisionBy: null,
+          reviewAssignedToUid: null,
+          reviewAssignedToName: null,
+          reviewDueDate: null,
           reviewComment: reason.trim(),
           signatures: [],
           versions: [...detail.versions],
@@ -1187,6 +1261,9 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
         const fieldChanges = [
           fieldChange("Structured block count", detail.authoringBlocks.length, blocks.length),
           fieldChange("Structured block titles", detail.authoringBlocks.map((block) => block.title), blocks.map((block) => block.title)),
+          fieldChange("Structured block kinds", detail.authoringBlocks.map((block) => block.kind), blocks.map((block) => block.kind)),
+          fieldChange("Required structured blocks", detail.authoringBlocks.filter((block) => block.required).map((block) => block.title), blocks.filter((block) => block.required).map((block) => block.title)),
+          fieldChange("Structured block content", detail.authoringBlocks.map((block) => block.content), blocks.map((block) => block.content)),
         ].filter((change): change is AuditFieldChange => Boolean(change));
         const changePatch = experimentChangePatch(detail, actor, actorUid, deviceIdentity, "Updated structured authoring blocks", fieldChanges, timestamp);
         await updateDoc(docFor(labId, "experiments", experimentId), {
@@ -1396,6 +1473,17 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           name: input.name.trim(),
           description: input.description.trim(),
           status: input.status,
+          visibility: input.visibility ?? existing?.visibility ?? "lab",
+          allowedMemberUids: input.allowedMemberUids ?? existing?.allowedMemberUids ?? [],
+          readOnlyShareEnabled: input.readOnlyShareEnabled ?? existing?.readOnlyShareEnabled ?? false,
+          shareToken:
+            input.readOnlyShareEnabled ?? existing?.readOnlyShareEnabled
+              ? existing?.shareToken ?? createShareToken()
+              : null,
+          shareCreatedAt:
+            input.readOnlyShareEnabled ?? existing?.readOnlyShareEnabled
+              ? existing?.shareCreatedAt ?? timestamp
+              : null,
           ownerUid: existing?.ownerUid || actorUid,
           ownerName: existing?.ownerName || actor,
           notebooks: input.notebooks.map((item) => item.trim()).filter(Boolean),
@@ -1408,6 +1496,9 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           { key: "name", label: "Name" },
           { key: "description", label: "Description" },
           { key: "status", label: "Status" },
+          { key: "visibility", label: "Visibility" },
+          { key: "allowedMemberUids", label: "Project members" },
+          { key: "readOnlyShareEnabled", label: "Read-only share" },
           { key: "notebooks", label: "Notebooks" },
           { key: "folders", label: "Folders" },
           { key: "tags", label: "Tags" },
@@ -1529,6 +1620,11 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           fileName: input.fileName,
           rowCount: input.rowCount,
           summary: input.summary,
+          importType: input.importType ?? "unknown",
+          columns: input.columns ?? [],
+          previewRows: input.previewRows ?? [],
+          mapping: input.mapping ?? {},
+          validationIssues: input.validationIssues ?? [],
           createdBy: actor,
           createdAt: nowIso(),
         };
@@ -1536,6 +1632,9 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           fieldChange("Source", null, record.source),
           fieldChange("File", null, record.fileName),
           fieldChange("Rows", null, record.rowCount),
+          fieldChange("Import type", null, record.importType),
+          fieldChange("Columns", null, record.columns),
+          fieldChange("Validation issues", null, record.validationIssues),
           fieldChange("Summary", null, record.summary),
         ].filter((change): change is AuditFieldChange => Boolean(change));
         await setDoc(docFor(labId, "integrationImports", id), record);

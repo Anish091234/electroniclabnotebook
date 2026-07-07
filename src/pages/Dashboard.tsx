@@ -6,15 +6,19 @@ import { StatusBadge } from "../components/StatusBadge";
 import { SearchIcon, AlertIcon } from "../components/icons";
 import type { ExperimentStatus } from "../data/types";
 import { useLabData } from "../contexts/LabDataContext";
+import { useAuth } from "../contexts/AuthContext";
 
 type TabKey = "all" | "active" | "review" | "complete" | "draft";
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { experiments, experimentDetails, protocolTemplates, projectRecords, createExperiment } = useLabData();
+  const { activeMember } = useAuth();
+  const { experiments, experimentDetails, protocolTemplates, projectRecords, error: labDataError, createExperiment } = useLabData();
   const [tab, setTab] = useState<TabKey>("all");
   const [query, setQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreatingExperiment, setIsCreatingExperiment] = useState(false);
   const [newExperiment, setNewExperiment] = useState({
     name: "",
     project: "",
@@ -96,28 +100,46 @@ export function Dashboard() {
 
   const closeCreateModal = () => {
     setIsCreateOpen(false);
+    setCreateError(null);
+    setIsCreatingExperiment(false);
     setNewExperiment({ name: "", project: "", objective: "", tags: "", protocolTemplateId: "", projectId: "", notebook: "General Notebook", dueDate: "" });
   };
 
   const submitNewExperiment = async (e: FormEvent) => {
     e.preventDefault();
-    const created = await createExperiment({
-      name: newExperiment.name,
-      project: newExperiment.project,
-      objective:
-        newExperiment.objective ||
-        "Draft objective. Capture the hypothesis, materials, expected outputs, and success criteria before running.",
-      tags: newExperiment.tags.split(","),
-      protocolTemplateId: newExperiment.protocolTemplateId || undefined,
-      projectId: newExperiment.projectId || undefined,
-      notebook: newExperiment.notebook,
-      dueDate: newExperiment.dueDate || undefined,
-    });
-    closeCreateModal();
-    navigate(`/experiments/${created.id}`);
+    if (isCreatingExperiment) return;
+
+    setCreateError(null);
+    setIsCreatingExperiment(true);
+
+    try {
+      const created = await createExperiment({
+        name: newExperiment.name,
+        project: newExperiment.project,
+        objective:
+          newExperiment.objective ||
+          "Draft objective. Capture the hypothesis, materials, expected outputs, and success criteria before running.",
+        tags: newExperiment.tags.split(","),
+        protocolTemplateId: newExperiment.protocolTemplateId || undefined,
+        projectId: newExperiment.projectId || undefined,
+        notebook: newExperiment.notebook,
+        dueDate: newExperiment.dueDate || undefined,
+      });
+      closeCreateModal();
+      navigate(`/experiments/${created.id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to create experiment.";
+      setCreateError(
+        message.includes("Missing or insufficient permissions") || message.includes("permission-denied")
+          ? "Firebase denied the create request. Deploy the Firestore rules in this repo, then try again."
+          : message,
+      );
+      setIsCreatingExperiment(false);
+    }
   };
 
   const latestExperiment = experiments[0];
+  const canCreateExperiment = !!activeMember && activeMember.status === "active" && activeMember.role !== "viewer" && activeMember.role !== "external";
 
   return (
     <>
@@ -132,13 +154,15 @@ export function Dashboard() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <button className="btn-primary" onClick={() => setIsCreateOpen(true)}>
+          <button className="btn-primary" disabled={!canCreateExperiment} onClick={() => canCreateExperiment && setIsCreateOpen(true)}>
             + New Experiment
           </button>
         </div>
       </div>
 
       <div className="dashboard-content">
+        {labDataError && <div className="modal-error">{labDataError}</div>}
+
         <div className="stats-grid">
           {stats.map((s) => (
             <div key={s.label} className={`stat-card${s.noteColor === "accent" ? " accent" : ""}`}>
@@ -233,6 +257,8 @@ export function Dashboard() {
               </button>
             </div>
 
+            {createError && <div className="modal-error">{createError}</div>}
+
             <label className="modal-field">
               <span>Title</span>
               <input
@@ -314,8 +340,8 @@ export function Dashboard() {
               <button type="button" className="btn-secondary" onClick={closeCreateModal}>
                 Cancel
               </button>
-              <button className="btn-primary" type="submit">
-                Create Draft
+              <button className="btn-primary" type="submit" disabled={isCreatingExperiment}>
+                {isCreatingExperiment ? "Creating..." : "Create Draft"}
               </button>
             </div>
           </form>

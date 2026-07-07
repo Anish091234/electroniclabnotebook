@@ -19,6 +19,7 @@ export function Collaboration() {
 
   const reviewQueue = Object.values(experimentDetails).filter((experiment) => experiment.status === "review" || experiment.reviewStatus === "requested");
   const openTasks = collaborationTasks.filter((item) => item.status !== "done");
+  const overdueReviews = reviewQueue.filter((experiment) => experiment.reviewDueDate && Date.parse(experiment.reviewDueDate) < Date.now());
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -40,9 +41,9 @@ export function Collaboration() {
       <div className="workbench-content">
         <div className="score-list">
           <div className="score-card"><span>Review Queue</span><strong>{reviewQueue.length}</strong><small>Awaiting PI action</small></div>
+          <div className="score-card"><span>Overdue Reviews</span><strong>{overdueReviews.length}</strong><small>Past assigned due date</small></div>
           <div className="score-card"><span>Open Tasks</span><strong>{openTasks.length}</strong><small>Assigned follow-ups</small></div>
           <div className="score-card"><span>Completed</span><strong>{collaborationTasks.filter((item) => item.status === "done").length}</strong><small>Closed tasks</small></div>
-          <div className="score-card"><span>Activity</span><strong>{auditEvents.length}</strong><small>Audit events</small></div>
         </div>
 
         <div className="workbench-grid">
@@ -73,6 +74,13 @@ export function Collaboration() {
                   <div>
                     <h3>{experiment.name}</h3>
                     <p>{experiment.reviewComment || experiment.objective || "No review note."}</p>
+                    <div className="workbench-pill-row">
+                      <span className="workbench-pill">{experiment.reviewAssignedToName || "Unassigned reviewer"}</span>
+                      <span className={`workbench-pill${experiment.reviewDueDate && Date.parse(experiment.reviewDueDate) < Date.now() ? " primary" : ""}`}>
+                        {experiment.reviewDueDate || "No due date"}
+                      </span>
+                      <span className="workbench-pill">{auditEvents.filter((event) => event.targetId === experiment.id).length} audit events</span>
+                    </div>
                   </div>
                   <button className="btn-secondary" onClick={() => navigate(`/experiments/${experiment.id}`)}>Open</button>
                 </div>

@@ -91,10 +91,50 @@
   margin: 8px 0;
 }
 
-.report-block pre {
-  white-space: pre-wrap;
-  color: #334155;
-  font: 400 12px/1.55 ui-monospace, Menlo, Monaco, monospace;
+.report-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.report-data-table th,
+.report-data-table td {
+  border: 1px solid #e2e8f0;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+  font: 400 11px/1.4 system-ui, sans-serif;
+}
+
+.report-data-table th {
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.report-checklist {
+  padding-left: 18px;
+}
+
+.report-block-image {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.report-equation {
+  margin-top: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 10px;
+  color: #0f172a;
+  font: 700 14px/1.45 ui-monospace, Menlo, Monaco, monospace;
+  overflow-wrap: anywhere;
 }
 
 .report-version {

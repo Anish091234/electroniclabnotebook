@@ -4,6 +4,7 @@ import "./Dashboard.css";
 import "./CompetitivePages.css";
 import { SearchIcon } from "../components/icons";
 import { useLabData } from "../contexts/LabDataContext";
+import { blockSearchText } from "../lib/authoringBlocks";
 
 type SearchKind = "Experiment" | "Protocol" | "Inventory" | "Sample" | "Project" | "Comment" | "Attachment" | "Task" | "Audit";
 
@@ -41,8 +42,17 @@ export function Search() {
         id: experiment.id,
         kind: "Experiment" as const,
         title: experiment.name,
-        body: [experiment.objective, experiment.notes, experiment.observations, experiment.tags.join(" ")].join(" "),
-        meta: [experiment.id, experiment.project, experiment.owner, experiment.status, experiment.reviewStatus ?? "none", experiment.modified],
+        body: [experiment.objective, experiment.notes, experiment.observations, experiment.tags.join(" "), experiment.authoringBlocks.map(blockSearchText).join(" ")].join(" "),
+        meta: [
+          experiment.id,
+          experiment.project,
+          experiment.owner,
+          experiment.status,
+          experiment.reviewStatus ?? "none",
+          experiment.reviewAssignedToName ?? "",
+          experiment.reviewDueDate ?? "",
+          experiment.modified,
+        ],
         path: `/experiments/${experiment.id}`,
       })),
       ...Object.values(experimentDetails).flatMap((experiment) =>
@@ -93,8 +103,8 @@ export function Search() {
         id: project.id,
         kind: "Project" as const,
         title: project.name,
-        body: [project.description, project.notebooks.join(" "), project.folders.join(" "), project.tags.join(" ")].join(" "),
-        meta: [project.status, `${project.notebooks.length} notebooks`, `${project.folders.length} folders`],
+        body: [project.description, project.notebooks.join(" "), project.folders.join(" "), project.tags.join(" "), project.visibility ?? "lab", project.shareToken ?? ""].join(" "),
+        meta: [project.status, project.visibility ?? "lab", `${project.notebooks.length} notebooks`, `${project.folders.length} folders`],
         path: "/projects",
       })),
       ...attachments.map((file) => ({

@@ -8,6 +8,7 @@ import {
   createLabInvite,
   subscribeLabInvites,
   subscribeLabMembers,
+  updateLabMember,
 } from "../services/accountService";
 
 type InviteRole = Exclude<LabRole, "owner">;
@@ -20,12 +21,23 @@ const INVITE_ROLE_OPTIONS: { value: InviteRole; label: string }[] = [
   { value: "external", label: "External Collaborator" },
 ];
 
+const MEMBER_ROLE_OPTIONS: { value: LabRole; label: string }[] = [
+  { value: "owner", label: "Owner / PI" },
+  { value: "admin", label: "Admin" },
+  { value: "pi", label: "PI" },
+  { value: "researcher", label: "Researcher" },
+  { value: "viewer", label: "Viewer" },
+  { value: "external", label: "External Collaborator" },
+];
+
 const EMPTY_INVITE_FORM = {
   email: "",
   displayName: "",
   role: "researcher" as InviteRole,
   piUid: "",
 };
+
+const configuredAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim().replace(/\/+$/, "");
 
 export function Team() {
   const { activeLab, activeMember, user } = useAuth();
@@ -37,9 +49,12 @@ export function Team() {
   const [isInvitesLoading, setIsInvitesLoading] = useState(true);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
+  const [emailPreview, setEmailPreview] = useState<{ to: string; subject: string; body: string; inviteUrl: string } | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [inviteForm, setInviteForm] = useState(EMPTY_INVITE_FORM);
 
   const canManageInvites = activeMember?.role === "owner" || activeMember?.role === "admin";
+  const canManageAccounts = canManageInvites;
 
   useEffect(() => {
     if (!activeLab) {
@@ -157,7 +172,7 @@ export function Team() {
         piUid: inviteForm.piUid || null,
         invitedByUid: user.uid,
         invitedByName: user.name,
-        appOrigin: window.location.origin,
+        appOrigin: configuredAppUrl || window.location.origin,
       });
       closeInviteModal();
     } catch (err) {
@@ -171,16 +186,36 @@ export function Team() {
     await cancelLabInvite(activeLab.id, inviteId);
   };
 
+  const updateMemberRole = async (member: LabMember, role: LabRole) => {
+    if (!activeLab || member.uid === activeMember?.uid || !canManageAccounts) return;
+    await updateLabMember(activeLab.id, member.uid, {
+      role,
+      piUid: role === "researcher" ? member.piUid || piMembers[0]?.uid || null : role === "pi" ? member.uid : null,
+    });
+  };
+
+  const updateMemberPi = async (member: LabMember, piUid: string) => {
+    if (!activeLab || !canManageAccounts) return;
+    await updateLabMember(activeLab.id, member.uid, { piUid: piUid || null });
+  };
+
+  const toggleMemberStatus = async (member: LabMember) => {
+    if (!activeLab || member.uid === activeMember?.uid || !canManageAccounts) return;
+    await updateLabMember(activeLab.id, member.uid, { status: member.status === "disabled" ? "active" : "disabled" });
+  };
+
+  const appOrigin = configuredAppUrl || window.location.origin;
+
   const inviteUrlFor = (invite: LabInvite) => {
-    if (!activeLab) return invite.inviteUrl;
-    const url = new URL(invite.inviteUrl || `${window.location.origin}/login`);
+    const fallbackUrl = `${appOrigin}/login`;
+    const url = new URL(invite.inviteUrl || fallbackUrl);
     url.searchParams.set("invite", invite.token);
     url.searchParams.set("inviteId", invite.id);
-    url.searchParams.set("labId", activeLab.id);
+    url.searchParams.set("labId", activeLab?.id ?? "");
     return url.toString();
   };
 
-  const openInviteEmail = (invite: LabInvite) => {
+  const inviteEmailFor = (invite: LabInvite) => {
     if (!activeLab || !user) return;
     const role = roleLabel(invite.role).toLowerCase();
     const subject = `${user.name} invited you to ${activeLab.name} on LabOS`;
@@ -192,9 +227,47 @@ export function Team() {
       `Accept the invite here: ${inviteUrlFor(invite)}`,
       "",
       "If you were not expecting this invite, you can ignore this email.",
-    ].join("\n");
+    ].join("\r\n");
 
-    window.location.href = `mailto:${encodeURIComponent(invite.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    return { to: invite.email, subject, body, inviteUrl: inviteUrlFor(invite) };
+  };
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const copyInviteLink = async (invite: LabInvite) => {
+    const inviteUrl = inviteUrlFor(invite);
+    await copyText(inviteUrl);
+    setCopiedInviteId(invite.id);
+    window.setTimeout(() => setCopiedInviteId((current) => (current === invite.id ? null : current)), 2000);
+  };
+
+  const copyInviteEmail = async (invite: LabInvite) => {
+    const email = inviteEmailFor(invite);
+    if (!email) return;
+    await copyText(email.body);
+    setCopiedInviteId(invite.id);
+    window.setTimeout(() => setCopiedInviteId((current) => (current === invite.id ? null : current)), 2000);
+  };
+
+  const openInviteEmail = async (invite: LabInvite) => {
+    const email = inviteEmailFor(invite);
+    if (!email) return;
+    setEmailPreview(email);
+    await copyText(email.body);
+
+    const params = new URLSearchParams({
+      subject: email.subject,
+      body: email.body,
+    });
+
+    window.location.href = `mailto:${encodeURIComponent(email.to)}?${params.toString()}`;
   };
 
   return (
@@ -320,23 +393,27 @@ export function Team() {
                       <div>
                         <h3>{invite.displayName}</h3>
                         <p>{invite.email}</p>
+                        <code className="invite-link-preview">{inviteUrlFor(invite)}</code>
                       </div>
                       <span className="invite-role-pill">{roleLabel(invite.role)}</span>
                       <span className="invite-meta">{invite.role === "researcher" ? piNameFor(invite.piUid, members) : "Lab-wide"}</span>
                       <button
                         className="invite-cancel-btn"
-                        onClick={() => navigator.clipboard.writeText(inviteUrlFor(invite))}
+                        onClick={() => copyInviteLink(invite)}
                       >
-                        Copy Link
+                        {copiedInviteId === invite.id ? "Copied" : "Copy Link"}
                       </button>
                       <button className="invite-cancel-btn" onClick={() => openInviteEmail(invite)}>
                         Email Invite
+                      </button>
+                      <button className="invite-cancel-btn" onClick={() => copyInviteEmail(invite)}>
+                        Copy Email
                       </button>
                       <button className="invite-cancel-btn" onClick={() => handleCancelInvite(invite.id)}>
                         Cancel
                       </button>
                       <small className="invite-email-state">
-                        Spark-safe invite link. Use Email Invite or Copy Link.
+                        Spark-safe invite link. Email Invite opens your mail app and copies the full invite text as backup.
                       </small>
                     </article>
                   ))}
@@ -359,6 +436,7 @@ export function Team() {
                       <th>Role</th>
                       <th>Status</th>
                       <th>PI</th>
+                      {canManageAccounts && <th>Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -371,9 +449,33 @@ export function Team() {
                           </div>
                         </td>
                         <td>{member.email}</td>
-                        <td>{roleLabel(member.role)}</td>
-                        <td>{member.status}</td>
-                        <td>{piNameFor(member.piUid, members)}</td>
+                        <td>
+                          {canManageAccounts && member.uid !== activeMember?.uid ? (
+                            <select className="team-inline-select" value={member.role} onChange={(e) => updateMemberRole(member, e.target.value as LabRole)}>
+                              {MEMBER_ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                          ) : (
+                            roleLabel(member.role)
+                          )}
+                        </td>
+                        <td><span className={`member-status-pill ${member.status}`}>{member.status}</span></td>
+                        <td>
+                          {canManageAccounts && member.role === "researcher" ? (
+                            <select className="team-inline-select" value={member.piUid ?? ""} onChange={(e) => updateMemberPi(member, e.target.value)}>
+                              <option value="">Unassigned</option>
+                              {piMembers.map((pi) => <option key={pi.uid} value={pi.uid}>{pi.displayName}</option>)}
+                            </select>
+                          ) : (
+                            piNameFor(member.piUid, members)
+                          )}
+                        </td>
+                        {canManageAccounts && (
+                          <td>
+                            <button className="invite-cancel-btn" disabled={member.uid === activeMember?.uid} onClick={() => toggleMemberStatus(member)}>
+                              {member.status === "disabled" ? "Reactivate" : "Disable"}
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -460,6 +562,52 @@ export function Team() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {emailPreview && (
+        <div className="modal-backdrop" onMouseDown={() => setEmailPreview(null)}>
+          <div className="team-invite-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="experiment-modal-header">
+              <div>
+                <h2>Email Invite</h2>
+                <p>If your email app opened blank, use this copy as the source of truth.</p>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setEmailPreview(null)}>
+                x
+              </button>
+            </div>
+
+            <label className="modal-field">
+              <span>To</span>
+              <input value={emailPreview.to} readOnly />
+            </label>
+            <label className="modal-field">
+              <span>Subject</span>
+              <input value={emailPreview.subject} readOnly />
+            </label>
+            <label className="modal-field">
+              <span>Invite Link</span>
+              <input value={emailPreview.inviteUrl} readOnly />
+            </label>
+            <label className="modal-field">
+              <span>Email Body</span>
+              <textarea value={emailPreview.body} readOnly rows={8} />
+            </label>
+
+            <div className="team-invite-note">
+              The full email body was copied to your clipboard before opening the mail app.
+            </div>
+
+            <div className="experiment-modal-actions">
+              <button type="button" className="btn-secondary" onClick={() => copyText(emailPreview.inviteUrl)}>
+                Copy Link
+              </button>
+              <button type="button" className="btn-primary" onClick={() => copyText(emailPreview.body)}>
+                Copy Email Body
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

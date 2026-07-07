@@ -109,8 +109,10 @@ labs/{labId}/attachments/{attachmentId}
 Publish both rules files before testing multi-user access:
 
 ```bash
-firebase deploy --only firestore:rules,storage
+npm run firebase:deploy-rules
 ```
+
+If `Create Draft` shows `Firebase denied the create request`, the app is reaching Firebase but the deployed rules do not yet allow the lab-scoped ELN collections. Run the command above after signing in to the Firebase CLI for the `labos-6cfe7` project.
 
 Current rules are lab-scoped and role-aware:
 
@@ -128,9 +130,9 @@ The app now includes Spark-safe v1 surfaces for:
 - Global search across lab records.
 - PI review, electronic signature, signed-record locking, and amendments.
 - Device-aware audit/version history for persisted edits across experiments, protocols, inventory, registry, projects, tasks, notifications, and imports.
-- Structured authoring blocks, protocol notes, deviations, timers, and step attachments.
+- Structured authoring blocks, rendered tables, checklists, equations, inline images, protocol notes, deviations, timers, and step attachments.
 - Sample/registry records with lineage.
 - Projects, notebooks, folders, and archive-ready project status.
 - Notifications, collaboration tasks, PI review queue, and activity views.
 - Compliance Center checks for unsigned completed records, missing objectives, missing reagent lots, expired lots, stale drafts, overdue tasks, and unresolved reviews.
-- Template library and CSV/instrument import records.
+- Template library, CSV preview/validation, inventory CSV import, and ZIP export with attachment manifests.
