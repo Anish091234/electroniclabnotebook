@@ -265,12 +265,6 @@ export async function acceptLabInvite(
     throw new Error("Invite link is invalid or has already been used.");
   }
 
-  const labRef = doc(firestore, "labs", input.labId);
-  const labSnapshot = await getDoc(labRef);
-  if (!labSnapshot.exists()) {
-    throw new Error("Invited lab was not found.");
-  }
-
   const userRef = doc(firestore, "users", user.uid);
   const userSnapshot = await getDoc(userRef);
   const displayName = user.displayName || invite.displayName || normalizedEmail.split("@")[0] || "New researcher";
@@ -295,10 +289,16 @@ export async function acceptLabInvite(
     joinedAt: timestamp,
     updatedAt: timestamp,
   };
-  const lab = { id: labSnapshot.id, ...(labSnapshot.data() as Omit<Lab, "id">) };
 
   await setDoc(userRef, profile, { merge: true });
   await setDoc(doc(firestore, "labs", input.labId, "members", user.uid), member);
+
+  const labRef = doc(firestore, "labs", input.labId);
+  const labSnapshot = await getDoc(labRef);
+  if (!labSnapshot.exists()) {
+    throw new Error("Invited lab was not found.");
+  }
+  const lab = { id: labSnapshot.id, ...(labSnapshot.data() as Omit<Lab, "id">) };
 
   if (member.role === "pi") {
     await setDoc(doc(firestore, "labs", input.labId, "piGroups", user.uid), {
