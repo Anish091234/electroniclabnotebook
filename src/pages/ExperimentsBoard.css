@@ -1,0 +1,327 @@
+/* Experiments board — dedicated dark/cyan technical theme, per Claude Design handoff.
+   Deliberately independent of index.css theme variables (always dark, regardless of
+   the app-wide light/dark toggle) and uses its own class names so it never touches
+   the shared topbar/btn-primary/stat-card/etc. styles other pages rely on. */
+
+.xb-root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #0f1113;
+  color: #e7e9ec;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+.xb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 30px 36px 0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.xb-header h1 {
+  font: 600 24px system-ui, sans-serif;
+  color: #f4f5f6;
+  margin: 0;
+}
+
+.xb-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.xb-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: #181b1f;
+  border: 1px solid #262b31;
+  border-radius: 7px;
+  padding: 7px 12px;
+}
+
+.xb-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font: 400 12px system-ui, sans-serif;
+  color: #e7e9ec;
+  width: 170px;
+}
+
+.xb-search input::placeholder {
+  color: #6b7280;
+}
+
+.xb-btn-primary {
+  background: #22d3ee;
+  color: #062b30;
+  font: 600 12px system-ui, sans-serif;
+  padding: 8px 14px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+  white-space: nowrap;
+}
+
+.xb-btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.xb-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.xb-error {
+  margin: 16px 36px 0;
+  border: 1px solid #7f1d35;
+  background: #3a1821;
+  color: #fda4af;
+  border-radius: 6px;
+  padding: 9px 12px;
+  font: 600 11.5px/1.45 system-ui, sans-serif;
+}
+
+.xb-columns {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  align-content: start;
+  padding: 20px 36px 36px;
+  overflow: auto;
+}
+
+.xb-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.xb-column-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 11px system-ui, sans-serif;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.xb-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.xb-column-empty {
+  font: 400 11.5px system-ui, sans-serif;
+  color: #4b5563;
+  border: 1px dashed #242930;
+  border-radius: 10px;
+  padding: 13px;
+}
+
+.xb-card {
+  background: #171a1e;
+  border: 1px solid #242930;
+  border-radius: 10px;
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, transform 0.12s ease;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+}
+
+.xb-card:hover {
+  border-color: #3a4753;
+  transform: translateY(-1px);
+}
+
+.xb-card-name {
+  font: 600 12.5px system-ui, sans-serif;
+  color: #f4f5f6;
+}
+
+.xb-card-id {
+  font: 400 10.5px ui-monospace, Menlo, Monaco, monospace;
+  color: #6b7280;
+}
+
+.xb-progress-track {
+  height: 4px;
+  background: #242930;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.xb-progress-fill {
+  height: 100%;
+  background: #22d3ee;
+}
+
+.xb-card-meta {
+  font: 400 11px system-ui, sans-serif;
+  color: #4b5563;
+}
+
+/* create-experiment modal, dark variant */
+.xb-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 20;
+}
+
+.xb-modal {
+  width: min(460px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: #14171a;
+  border: 1px solid #242930;
+  border-radius: 10px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.46);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.xb-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.xb-modal-header h2 {
+  font: 700 16px system-ui, sans-serif;
+  color: #f4f5f6;
+  margin: 0 0 3px;
+}
+
+.xb-modal-header p {
+  font: 400 12px/1.45 system-ui, sans-serif;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.xb-modal-close {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #262b31;
+  background: #181b1f;
+  color: #9ca3af;
+  border-radius: 5px;
+  font: 700 12px system-ui, sans-serif;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.xb-modal-error {
+  border: 1px solid #7f1d35;
+  background: #3a1821;
+  color: #fda4af;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font: 600 11.5px/1.45 system-ui, sans-serif;
+}
+
+.xb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.xb-field span {
+  font: 600 11px system-ui, sans-serif;
+  color: #9ca3af;
+}
+
+.xb-field input,
+.xb-field textarea,
+.xb-field select {
+  border: 1px solid #262b31;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font: 400 12.5px/1.5 system-ui, sans-serif;
+  color: #e7e9ec;
+  background: #101214;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.xb-field input:focus,
+.xb-field textarea:focus,
+.xb-field select:focus {
+  border-color: #22d3ee;
+}
+
+.xb-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.xb-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.xb-btn-secondary {
+  background: transparent;
+  border: 1px solid #262b31;
+  color: #9ca3af;
+  font: 500 12px system-ui, sans-serif;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.xb-btn-secondary:hover {
+  background: #191d22;
+}
+
+@media (max-width: 980px) {
+  .xb-columns {
+    grid-template-columns: repeat(4, minmax(240px, 1fr));
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .xb-header {
+    padding: 20px 18px 0;
+  }
+
+  .xb-columns {
+    padding: 16px 18px 24px;
+  }
+
+  .xb-field-grid {
+    grid-template-columns: 1fr;
+  }
+}

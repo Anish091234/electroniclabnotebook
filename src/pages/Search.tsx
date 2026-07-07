@@ -3,8 +3,10 @@ import { useNavigate } from "react-router-dom";
 import "./Dashboard.css";
 import "./CompetitivePages.css";
 import { SearchIcon } from "../components/icons";
+import { StatusBadge } from "../components/StatusBadge";
 import { useLabData } from "../contexts/LabDataContext";
 import { blockSearchText } from "../lib/authoringBlocks";
+import type { ExperimentStatus } from "../data/types";
 
 type SearchKind = "Experiment" | "Protocol" | "Inventory" | "Sample" | "Project" | "Comment" | "Attachment" | "Task" | "Audit";
 
@@ -15,6 +17,7 @@ interface SearchResult {
   body: string;
   meta: string[];
   path?: string;
+  status?: ExperimentStatus;
 }
 
 function includes(value: string, query: string) {
@@ -54,6 +57,7 @@ export function Search() {
           experiment.modified,
         ],
         path: `/experiments/${experiment.id}`,
+        status: experiment.status,
       })),
       ...Object.values(experimentDetails).flatMap((experiment) =>
         experiment.comments.map((comment) => ({
@@ -173,13 +177,23 @@ export function Search() {
             <article key={`${result.kind}-${result.id}`} className="workbench-card workbench-result" onClick={() => result.path && navigate(result.path)}>
               <div className="workbench-card-row">
                 <div>
-                  <h2>{result.title}</h2>
+                  <h2>
+                    {result.title}
+                    {result.kind === "Experiment" && (
+                      <span style={{ marginLeft: 8, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 400, color: "var(--color-text-faint)" }}>
+                        {result.id}
+                      </span>
+                    )}
+                  </h2>
                   <p>{result.body || "No indexed body text."}</p>
                 </div>
-                <span className="workbench-pill primary">{result.kind}</span>
+                {result.status ? <StatusBadge status={result.status} /> : <span className="workbench-pill primary">{result.kind}</span>}
               </div>
               <div className="workbench-pill-row">
-                {result.meta.filter(Boolean).map((meta) => <span key={meta} className="workbench-pill">{meta}</span>)}
+                {result.meta
+                  .filter(Boolean)
+                  .filter((meta) => meta !== result.status)
+                  .map((meta) => <span key={meta} className="workbench-pill">{meta}</span>)}
               </div>
             </article>
           ))}
