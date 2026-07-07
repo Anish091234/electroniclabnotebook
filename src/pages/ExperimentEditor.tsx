@@ -18,6 +18,25 @@ const STATUS_OPTIONS: { value: ExperimentStatus; label: string }[] = [
   { value: "complete", label: "Complete" },
 ];
 
+const NOTE_SNIPPETS = [
+  {
+    label: "Timestamp",
+    value: () => `[${new Date().toLocaleString()}] `,
+  },
+  {
+    label: "Method Note",
+    value: () => ["Method:", "Materials:", "Parameters:", "Rationale:"].join("\n"),
+  },
+  {
+    label: "Deviation",
+    value: () => ["Deviation:", "Reason:", "Impact:", "Follow-up:"].join("\n"),
+  },
+  {
+    label: "Calculation",
+    value: () => ["Calculation:", "Inputs:", "Formula:", "Result:"].join("\n"),
+  },
+];
+
 export function ExperimentEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -148,6 +167,14 @@ export function ExperimentEditor() {
     detail.protocol.some((step) => step.required !== false && !step.reagentLotId) ? "Required reagent lots are not linked" : "",
     detail.authoringBlocks.some((block) => block.required && !block.content.trim()) ? "Required structured blocks are incomplete" : "",
   ].filter(Boolean);
+  const notebookStats = useMemo(
+    () => ({
+      objective: textStats(objective),
+      notes: textStats(notes),
+      observations: textStats(observations),
+    }),
+    [objective, notes, observations],
+  );
 
   const cycleStatus = (current: ProtocolStepStatus): ProtocolStepStatus => {
     if (current === "pending") return "in_progress";
@@ -175,6 +202,12 @@ export function ExperimentEditor() {
       tags: tagsDraft.split(","),
     });
     setSaveState("saved");
+  };
+
+  const insertNoteSnippet = (snippet: string) => {
+    const separator = notes.trim() ? "\n\n" : "";
+    setNotes(`${notes}${separator}${snippet}`);
+    markDirty();
   };
 
   const submitComment = async () => {
@@ -517,42 +550,91 @@ export function ExperimentEditor() {
             </label>
           </div>
 
-          <div className="editor-card">
-            <h3>Objective</h3>
-            <textarea
-              className="objective-textarea"
-              value={objective}
-              disabled={isReadOnly}
-              onChange={(e) => {
-                setObjective(e.target.value);
-                markDirty();
-              }}
-              rows={4}
-            />
-            <h3>Notebook Notes</h3>
-            <textarea
-              className="objective-textarea"
-              value={notes}
-              disabled={isReadOnly}
-              onChange={(e) => {
-                setNotes(e.target.value);
-                markDirty();
-              }}
-              rows={7}
-              placeholder="Methods, calculations, deviations, and running notes..."
-            />
-            <h3>Observations</h3>
-            <textarea
-              className="objective-textarea"
-              value={observations}
-              disabled={isReadOnly}
-              onChange={(e) => {
-                setObservations(e.target.value);
-                markDirty();
-              }}
-              rows={4}
-              placeholder="Results, anomalies, images reviewed, and interpretation..."
-            />
+          <div className="editor-card notebook-card">
+            <div className="notebook-header">
+              <div>
+                <span className="notebook-kicker">Experiment Notebook</span>
+                <h3>Record Notes</h3>
+                <p>Capture the hypothesis, live run notes, and final interpretation in one review-ready notebook surface.</p>
+              </div>
+              <div className="notebook-summary">
+                <strong>{notebookStats.objective.words + notebookStats.notes.words + notebookStats.observations.words}</strong>
+                <span>Total words</span>
+              </div>
+            </div>
+
+            <div className="notebook-grid">
+              <section className="notebook-editor-pane">
+                <NotebookField
+                  label="Objective"
+                  eyebrow="Why this experiment exists"
+                  value={objective}
+                  disabled={isReadOnly}
+                  rows={4}
+                  stats={notebookStats.objective}
+                  placeholder="State the hypothesis, expected outcome, and success criteria..."
+                  onChange={(value) => {
+                    setObjective(value);
+                    markDirty();
+                  }}
+                />
+
+                <div className="notebook-field">
+                  <div className="notebook-field-header">
+                    <div>
+                      <span>Live notebook</span>
+                      <strong>Notebook Notes</strong>
+                    </div>
+                    <small>{notebookStats.notes.words} words / {notebookStats.notes.lines} lines</small>
+                  </div>
+                  {!isReadOnly && (
+                    <div className="notebook-snippet-row">
+                      {NOTE_SNIPPETS.map((snippet) => (
+                        <button key={snippet.label} type="button" className="notebook-chip" onClick={() => insertNoteSnippet(snippet.value())}>
+                          {snippet.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <textarea
+                    className="objective-textarea notebook-textarea large"
+                    value={notes}
+                    disabled={isReadOnly}
+                    onChange={(e) => {
+                      setNotes(e.target.value);
+                      markDirty();
+                    }}
+                    rows={9}
+                    placeholder="Methods, calculations, deviations, and running notes..."
+                  />
+                </div>
+
+                <NotebookField
+                  label="Observations"
+                  eyebrow="What happened and what it means"
+                  value={observations}
+                  disabled={isReadOnly}
+                  rows={5}
+                  stats={notebookStats.observations}
+                  placeholder="Results, anomalies, images reviewed, and interpretation..."
+                  onChange={(value) => {
+                    setObservations(value);
+                    markDirty();
+                  }}
+                />
+              </section>
+
+              <aside className="notebook-preview-pane">
+                <div className="notebook-preview-header">
+                  <span>Preview</span>
+                  <strong>{notebook || "General Notebook"}</strong>
+                </div>
+                <NotebookPreview title="Objective" value={objective} empty="No objective recorded yet." />
+                <NotebookPreview title="Notebook Notes" value={notes} empty="No running notes recorded yet." />
+                <NotebookPreview title="Observations" value={observations} empty="No observations recorded yet." />
+              </aside>
+            </div>
+
             <h3>Structured Blocks</h3>
             <div className="authoring-template-row">
               {AUTHORING_TEMPLATES.map((template, index) => (
@@ -824,5 +906,74 @@ export function ExperimentEditor() {
         </div>
       </div>
     </>
+  );
+}
+
+type TextStats = {
+  words: number;
+  lines: number;
+};
+
+function textStats(value: string): TextStats {
+  const words = value.trim().split(/\s+/).filter(Boolean).length;
+  const lines = value.trim() ? value.split(/\r?\n/).length : 0;
+  return { words, lines };
+}
+
+function NotebookField({
+  label,
+  eyebrow,
+  value,
+  disabled,
+  rows,
+  stats,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  eyebrow: string;
+  value: string;
+  disabled: boolean;
+  rows: number;
+  stats: TextStats;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="notebook-field">
+      <div className="notebook-field-header">
+        <div>
+          <span>{eyebrow}</span>
+          <strong>{label}</strong>
+        </div>
+        <small>{stats.words} words / {stats.lines} lines</small>
+      </div>
+      <textarea
+        className="objective-textarea notebook-textarea"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+      />
+    </label>
+  );
+}
+
+function NotebookPreview({ title, value, empty }: { title: string; value: string; empty: string }) {
+  const paragraphs = value
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  return (
+    <section className="notebook-preview-section">
+      <h4>{title}</h4>
+      {paragraphs.length === 0 ? (
+        <p className="notebook-preview-empty">{empty}</p>
+      ) : (
+        paragraphs.map((paragraph, index) => <p key={`${title}-${index}`}>{paragraph}</p>)
+      )}
+    </section>
   );
 }
