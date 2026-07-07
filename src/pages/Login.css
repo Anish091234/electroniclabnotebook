@@ -66,9 +66,30 @@
   gap: 6px;
 }
 
+.login-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .login-field label {
   font: 500 11.5px system-ui, sans-serif;
   color: var(--color-text-secondary);
+}
+
+.login-label-row button {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  padding: 0;
+  font: 700 11px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.login-label-row button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .login-field input {

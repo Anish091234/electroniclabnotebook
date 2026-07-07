@@ -6,7 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { getPendingInvite, rememberInviteFromSearch, type PendingInvite } from "../lib/pendingInvite";
 
 export function Login() {
-  const { authError, clearAuthError, createAccount, isConfigured, login, loginWithApple, loginWithGoogle } = useAuth();
+  const { authError, clearAuthError, createAccount, isConfigured, login, loginWithApple, loginWithGoogle, resetPassword } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(() => getPendingInvite());
@@ -16,7 +16,9 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   const from = isInviteLogin ? "/dashboard" : (location.state as { from?: Location } | null)?.from?.pathname ?? "/dashboard";
 
@@ -26,6 +28,7 @@ export function Login() {
 
   const runLogin = async (callback: () => Promise<void>) => {
     setError(null);
+    setNotice(null);
     clearAuthError();
     setIsSubmitting(true);
     try {
@@ -41,6 +44,28 @@ export function Login() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     await runLogin(() => (authMode === "signin" ? login(email, password) : createAccount(email, password)));
+  };
+
+  const handleResetPassword = async () => {
+    setError(null);
+    setNotice(null);
+    clearAuthError();
+    setIsResettingPassword(true);
+
+    try {
+      await resetPassword(email);
+      setNotice("Password reset email sent. Check your inbox, then come back here to sign in.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to send password reset email");
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
+  const clearMessages = () => {
+    setError(null);
+    setNotice(null);
+    clearAuthError();
   };
 
   return (
@@ -71,6 +96,7 @@ export function Login() {
         )}
 
         {(error || authError) && <div className="login-error">{error || authError}</div>}
+        {notice && <div className="login-info">{notice}</div>}
         {isInviteLogin && (
           <div className="login-info">
             Invite link captured. Sign in or create an account with the invited email address to join the lab.
@@ -106,8 +132,7 @@ export function Login() {
             className={authMode === "signin" ? "active" : ""}
             onClick={() => {
               setAuthMode("signin");
-              setError(null);
-              clearAuthError();
+              clearMessages();
             }}
           >
             Sign in
@@ -117,8 +142,7 @@ export function Login() {
             className={authMode === "create" ? "active" : ""}
             onClick={() => {
               setAuthMode("create");
-              setError(null);
-              clearAuthError();
+              clearMessages();
             }}
           >
             Create account
@@ -139,7 +163,14 @@ export function Login() {
         </div>
 
         <div className="login-field">
-          <label htmlFor="password">Password</label>
+          <div className="login-label-row">
+            <label htmlFor="password">Password</label>
+            {authMode === "signin" && (
+              <button type="button" disabled={!isConfigured || isResettingPassword} onClick={handleResetPassword}>
+                {isResettingPassword ? "Sending..." : "Forgot password?"}
+              </button>
+            )}
+          </div>
           <input
             id="password"
             type="password"

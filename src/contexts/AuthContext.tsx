@@ -4,6 +4,7 @@ import {
   OAuthProvider,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -36,6 +37,7 @@ interface AuthContextValue {
   clearAuthError: () => void;
   login: (email: string, password: string) => Promise<void>;
   createAccount: (email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   loginWithApple: () => Promise<void>;
   logout: () => Promise<void>;
@@ -99,11 +101,11 @@ function friendlyCredentialError(err: unknown) {
   const code = typeof err === "object" && err && "code" in err ? String(err.code) : "";
 
   if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
-    return new Error("No account matched that email/password. Check your password or create an account.");
+    return new Error("Email/password sign-in did not match. Check the password, use Google/Apple if that is how you created the account, or send a password reset link.");
   }
 
   if (code === "auth/email-already-in-use") {
-    return new Error("An account already exists for that email. Use Sign in instead.");
+    return new Error("An account already exists for that email. Use Sign in, continue with Google/Apple, or reset the password.");
   }
 
   if (code === "auth/weak-password") {
@@ -115,6 +117,10 @@ function friendlyCredentialError(err: unknown) {
   }
 
   return err;
+}
+
+function publicAppUrl() {
+  return (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim().replace(/\/+$/, "") || window.location.origin;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -191,6 +197,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const resetPassword = async (email: string) => {
+    const firebaseAuth = getAuthInstance();
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      throw new Error("Enter your email first, then send a password reset link.");
+    }
+
+    try {
+      await sendPasswordResetEmail(firebaseAuth, normalizedEmail, {
+        url: `${publicAppUrl()}/login`,
+      });
+    } catch (err) {
+      throw friendlyCredentialError(err);
+    }
+  };
+
   const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
@@ -224,6 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearAuthError: () => setAuthError(null),
       login,
       createAccount,
+      resetPassword,
       loginWithGoogle,
       loginWithApple,
       logout,
