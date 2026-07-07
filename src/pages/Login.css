@@ -147,6 +147,36 @@
   background: var(--color-border);
 }
 
+.login-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.login-mode-toggle button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 7px 8px;
+  font: 700 11.5px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.login-mode-toggle button.active {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 10%);
+}
+
+.login-mode-toggle button:hover:not(.active) {
+  color: var(--color-primary);
+}
+
 .login-submit {
   background: var(--color-primary);
   color: white;

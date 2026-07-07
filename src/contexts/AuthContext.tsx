@@ -35,6 +35,7 @@ interface AuthContextValue {
   authError: string | null;
   clearAuthError: () => void;
   login: (email: string, password: string) => Promise<void>;
+  createAccount: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   loginWithApple: () => Promise<void>;
   logout: () => Promise<void>;
@@ -94,6 +95,28 @@ function friendlyAuthError(err: unknown) {
   return message;
 }
 
+function friendlyCredentialError(err: unknown) {
+  const code = typeof err === "object" && err && "code" in err ? String(err.code) : "";
+
+  if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
+    return new Error("No account matched that email/password. Check your password or create an account.");
+  }
+
+  if (code === "auth/email-already-in-use") {
+    return new Error("An account already exists for that email. Use Sign in instead.");
+  }
+
+  if (code === "auth/weak-password") {
+    return new Error("Use a password with at least 6 characters.");
+  }
+
+  if (code === "auth/invalid-email") {
+    return new Error("Enter a valid email address.");
+  }
+
+  return err;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -149,12 +172,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
     } catch (err) {
-      const code = typeof err === "object" && err && "code" in err ? String(err.code) : "";
-      if (code !== "auth/user-not-found" && code !== "auth/invalid-credential") {
-        throw err;
-      }
+      throw friendlyCredentialError(err);
+    }
+  };
 
+  const createAccount = async (email: string, password: string) => {
+    const firebaseAuth = getAuthInstance();
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      throw new Error("Email is required");
+    }
+
+    try {
       await createUserWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+    } catch (err) {
+      throw friendlyCredentialError(err);
     }
   };
 
@@ -190,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authError,
       clearAuthError: () => setAuthError(null),
       login,
+      createAccount,
       loginWithGoogle,
       loginWithApple,
       logout,

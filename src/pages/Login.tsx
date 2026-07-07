@@ -6,11 +6,12 @@ import { useAuth } from "../contexts/AuthContext";
 import { getPendingInvite, rememberInviteFromSearch, type PendingInvite } from "../lib/pendingInvite";
 
 export function Login() {
-  const { authError, clearAuthError, isConfigured, login, loginWithApple, loginWithGoogle } = useAuth();
+  const { authError, clearAuthError, createAccount, isConfigured, login, loginWithApple, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(() => getPendingInvite());
   const isInviteLogin = Boolean(pendingInvite);
+  const [authMode, setAuthMode] = useState<"signin" | "create">("signin");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,7 +40,7 @@ export function Login() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    await runLogin(() => login(email, password));
+    await runLogin(() => (authMode === "signin" ? login(email, password) : createAccount(email, password)));
   };
 
   return (
@@ -53,8 +54,14 @@ export function Login() {
         </div>
 
         <div className="login-heading">
-          <h1>{isInviteLogin ? "Accept lab invite" : "Welcome back"}</h1>
-          <p>{isInviteLogin ? "Sign in with the invited email to join the lab" : "Sign in or create your lab account"}</p>
+          <h1>{isInviteLogin ? "Accept lab invite" : authMode === "signin" ? "Welcome back" : "Create account"}</h1>
+          <p>
+            {isInviteLogin
+              ? "Sign in or create an account with the invited email to join the lab"
+              : authMode === "signin"
+                ? "Sign in to your existing lab account"
+                : "Create your LabOS account and starter lab"}
+          </p>
         </div>
 
         {!isConfigured && (
@@ -93,6 +100,31 @@ export function Login() {
           <span>Email</span>
         </div>
 
+        <div className="login-mode-toggle" aria-label="Email authentication mode">
+          <button
+            type="button"
+            className={authMode === "signin" ? "active" : ""}
+            onClick={() => {
+              setAuthMode("signin");
+              setError(null);
+              clearAuthError();
+            }}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            className={authMode === "create" ? "active" : ""}
+            onClick={() => {
+              setAuthMode("create");
+              setError(null);
+              clearAuthError();
+            }}
+          >
+            Create account
+          </button>
+        </div>
+
         <div className="login-field">
           <label htmlFor="email">Email</label>
           <input
@@ -121,11 +153,15 @@ export function Login() {
         </div>
 
         <button className="login-submit" type="submit" disabled={!isConfigured || isSubmitting}>
-          {isSubmitting ? "Signing in..." : "Continue with Email"}
+          {isSubmitting ? (authMode === "signin" ? "Signing in..." : "Creating...") : authMode === "signin" ? "Sign in with Email" : "Create Account"}
         </button>
 
         <p className="login-hint">
-          {isInviteLogin ? "Use the email address that received the invite." : "First email/password sign-in creates an account and a starter lab."}
+          {isInviteLogin
+            ? "Use the email address that received the invite. New invitees should choose Create account."
+            : authMode === "signin"
+              ? "Use this for an account you already created."
+              : "New accounts create a starter lab unless you are accepting an invite."}
         </p>
       </form>
     </div>
