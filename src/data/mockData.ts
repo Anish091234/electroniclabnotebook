@@ -1,4 +1,4 @@
-import type { Experiment, ExperimentDetail, Protocol, ProtocolDetail } from "./types";
+import type { AuditEvent, Experiment, ExperimentDetail, Protocol, ProtocolDetail } from "./types";
 
 export const currentUser = {
   name: "Dr. S. Chen",
@@ -8,7 +8,7 @@ export const currentUser = {
 };
 
 export const dashboardStats = [
-  { label: "Active", value: "12", note: "↑ 3 this week", noteColor: "positive" as const },
+  { label: "Active", value: "12", note: "up 3 this week", noteColor: "positive" as const },
   { label: "Protocols Run", value: "48", note: "This month", noteColor: "neutral" as const },
   { label: "Collaborators", value: "7", note: "3 projects", noteColor: "neutral" as const },
   { label: "AI Insights", value: "3", note: "New suggestions", noteColor: "accent" as const },
@@ -27,7 +27,7 @@ export const experiments: Experiment[] = [
   },
   {
     id: "EXP-2026-0141",
-    name: "Flow Cytometry — CD4/CD8 Panel",
+    name: "Flow Cytometry - CD4/CD8 Panel",
     project: "Immunotherapy",
     status: "active",
     modified: "Yesterday",
@@ -37,7 +37,7 @@ export const experiments: Experiment[] = [
   },
   {
     id: "EXP-2026-0139",
-    name: "Western Blot — Protein Expression",
+    name: "Western Blot - Protein Expression",
     project: "Proteomics",
     status: "review",
     modified: "3 days ago",
@@ -47,7 +47,7 @@ export const experiments: Experiment[] = [
   },
   {
     id: "EXP-2026-0138",
-    name: "Gel Electrophoresis — Batch 7",
+    name: "Gel Electrophoresis - Batch 7",
     project: "Genomics",
     status: "complete",
     modified: "1 week ago",
@@ -57,7 +57,7 @@ export const experiments: Experiment[] = [
   },
   {
     id: "EXP-2026-0136",
-    name: "Single-cell RNA Sequencing — Batch 3",
+    name: "Single-cell RNA Sequencing - Batch 3",
     project: "Genomics",
     status: "active",
     modified: "2 days ago",
@@ -67,7 +67,7 @@ export const experiments: Experiment[] = [
   },
   {
     id: "EXP-2026-0135",
-    name: "PCR Validation — Knockout Confirmation",
+    name: "PCR Validation - Knockout Confirmation",
     project: "Immunotherapy",
     status: "draft",
     modified: "5 days ago",
@@ -78,9 +78,9 @@ export const experiments: Experiment[] = [
 ];
 
 export const dashboardAIBanner = {
-  title: "AI: Transfection efficiency ↓23% in EXP-2026-0142",
+  title: "AI: Transfection efficiency down 23% in EXP-2026-0142",
   body: "Matches buffer prep anomaly from 2 prior runs. Compare Cas9:sgRNA ratio with EXP-2026-0131.",
-  actionLabel: "View Analysis →",
+  actionLabel: "View Analysis ->",
 };
 
 export const experimentDetails: Record<string, ExperimentDetail> = {
@@ -95,29 +95,33 @@ export const experimentDetails: Record<string, ExperimentDetail> = {
     tags: ["CRISPR", "T-cells"],
     objective:
       "Investigate PD-1 knockout effect on CD8+ T-cell cytotoxic activation. CRISPR-Cas9 targeting PDCD1 locus in primary human T cells from healthy donor PBMCs.",
+    notes: "RNP assembly started after CD8 enrichment. Confirm donor metadata and reagent lots before electroporation.",
+    observations: "Early viability is consistent with the lab average. No visible contamination or clotting noted.",
+    protocolTemplateId: null,
+    protocolTemplateVersion: null,
     protocol: [
       {
         id: "s1",
-        label: "PBMC isolation — Ficoll gradient",
+        label: "PBMC isolation - Ficoll gradient",
         status: "done",
         completedBy: "S.C.",
         completedAt: "9:12 AM",
       },
       {
         id: "s2",
-        label: "CD8+ T cell enrichment — EasySep Kit",
+        label: "CD8+ T cell enrichment - EasySep Kit",
         status: "done",
         completedBy: "M.P.",
         completedAt: "11:30 AM",
       },
       {
         id: "s3",
-        label: "RNP assembly — Cas9 protein + PD-1 sgRNA",
+        label: "RNP assembly - Cas9 protein + PD-1 sgRNA",
         status: "in_progress",
       },
       {
         id: "s4",
-        label: "Electroporation — Nucleofection 4D",
+        label: "Electroporation - Nucleofection 4D",
         status: "pending",
       },
       {
@@ -130,20 +134,20 @@ export const experimentDetails: Record<string, ExperimentDetail> = {
       {
         id: "ai1",
         kind: "alert",
-        title: "⚠ Efficiency Alert",
+        title: "Efficiency Alert",
         body: "Transfection eff. 23% below your 5-run avg. Compare Cas9:sgRNA ratio with EXP-2026-0131 where a 1:2.5 ratio resolved similar drop.",
       },
       {
         id: "ai2",
         kind: "success",
-        title: "✓ Steps 1–2 On Track",
+        title: "Steps 1-2 On Track",
         body: "Ficoll separation yield consistent with lab average. Viability >95%.",
       },
       {
         id: "ai3",
         kind: "suggestion",
         title: "Suggestion",
-        body: "Add trypan blue viability check pre-electroporation — improves Cas9 delivery ~18% per 3 internal runs.",
+        body: "Add trypan blue viability check pre-electroporation - improves Cas9 delivery ~18% per 3 internal runs.",
         actionLabel: "+ Add Step",
       },
     ],
@@ -152,7 +156,7 @@ export const experimentDetails: Record<string, ExperimentDetail> = {
         id: "c1",
         author: "M. Patel",
         initials: "MP",
-        body: "Purity came back at 97% for the CD8+ enrichment — logged in step 2.",
+        body: "Purity came back at 97% for the CD8+ enrichment - logged in step 2.",
         postedAt: "Yesterday, 11:34 AM",
       },
       {
@@ -164,11 +168,15 @@ export const experimentDetails: Record<string, ExperimentDetail> = {
       },
     ],
     history: [
-      { id: "h1", actor: "S. Chen", action: "Created experiment", timestamp: "Jul 3, 2026 · 4:02 PM" },
-      { id: "h2", actor: "S. Chen", action: "Completed step: PBMC isolation", timestamp: "Jul 6, 2026 · 9:12 AM" },
-      { id: "h3", actor: "M. Patel", action: "Completed step: CD8+ T cell enrichment", timestamp: "Jul 6, 2026 · 11:30 AM" },
-      { id: "h4", actor: "AI Assistant", action: "Flagged transfection efficiency anomaly", timestamp: "Jul 6, 2026 · 1:15 PM" },
+      { id: "h1", actor: "S. Chen", action: "Created experiment", timestamp: "Jul 3, 2026 4:02 PM" },
+      { id: "h2", actor: "S. Chen", action: "Completed step: PBMC isolation", timestamp: "Jul 6, 2026 9:12 AM" },
+      { id: "h3", actor: "M. Patel", action: "Completed step: CD8+ T cell enrichment", timestamp: "Jul 6, 2026 11:30 AM" },
+      { id: "h4", actor: "AI Assistant", action: "Flagged transfection efficiency anomaly", timestamp: "Jul 6, 2026 1:15 PM" },
     ],
+    attachmentIds: [],
+    authoringBlocks: [],
+    signatures: [],
+    versions: [],
   },
 };
 
@@ -319,3 +327,46 @@ export const protocolDetails: Record<string, ProtocolDetail> = {
     },
   },
 };
+
+export const auditEvents: AuditEvent[] = [
+  {
+    id: "audit-1",
+    kind: "experiment",
+    actor: "S. Chen",
+    action: "Created experiment",
+    targetId: "EXP-2026-0142",
+    targetLabel: "CRISPR-Cas9 T-Cell Knockout",
+    summary: "Experiment record created in Immunotherapy.",
+    timestamp: "Jul 3, 2026 4:02 PM",
+  },
+  {
+    id: "audit-2",
+    kind: "protocol",
+    actor: "S. Chen",
+    action: "Completed protocol step",
+    targetId: "EXP-2026-0142",
+    targetLabel: "PBMC isolation - Ficoll gradient",
+    summary: "Step marked done for EXP-2026-0142.",
+    timestamp: "Jul 6, 2026 9:12 AM",
+  },
+  {
+    id: "audit-3",
+    kind: "protocol",
+    actor: "M. Patel",
+    action: "Completed protocol step",
+    targetId: "EXP-2026-0142",
+    targetLabel: "CD8+ T cell enrichment - EasySep Kit",
+    summary: "Step marked done for EXP-2026-0142.",
+    timestamp: "Jul 6, 2026 11:30 AM",
+  },
+  {
+    id: "audit-4",
+    kind: "system",
+    actor: "AI Assistant",
+    action: "Flagged anomaly",
+    targetId: "EXP-2026-0142",
+    targetLabel: "Transfection efficiency",
+    summary: "AI surfaced a 23% transfection efficiency drop against the 5-run average.",
+    timestamp: "Jul 6, 2026 1:15 PM",
+  },
+];

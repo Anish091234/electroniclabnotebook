@@ -1,0 +1,127 @@
+.inventory-content {
+  flex: 1;
+  padding: 18px 22px;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: 390px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.inventory-editor-card,
+.inventory-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.inventory-editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-self: start;
+}
+
+.inventory-editor-card h2,
+.inventory-card h2 {
+  margin: 0;
+  font: 700 15px system-ui, sans-serif;
+  color: var(--color-text-primary);
+}
+
+.inventory-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.inventory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inventory-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.inventory-card-header p {
+  font: 400 12px system-ui, sans-serif;
+  color: var(--color-text-muted);
+  margin: 4px 0 0;
+}
+
+.inventory-lot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inventory-lot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px 48px 72px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  padding: 9px;
+  background: var(--color-bg-subtle);
+}
+
+.inventory-lot.low {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+}
+
+.inventory-lot.expired,
+.inventory-lot.depleted {
+  background: var(--color-danger-bg-soft);
+  border-color: var(--color-danger-border);
+}
+
+.inventory-lot strong,
+.inventory-lot span,
+.inventory-lot small {
+  display: block;
+  font: 600 11.5px system-ui, sans-serif;
+  color: var(--color-text-secondary);
+}
+
+.inventory-lot span,
+.inventory-lot small {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.inventory-lot input {
+  width: 100%;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 5px;
+  padding: 5px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+}
+
+.inventory-content.read-only {
+  grid-template-columns: 1fr;
+}
+
+.inventory-readonly-note {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--color-text-muted);
+  font: 500 12px system-ui, sans-serif;
+}
+
+@media (max-width: 980px) {
+  .inventory-content,
+  .inventory-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

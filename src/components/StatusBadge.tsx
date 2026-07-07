@@ -1,10 +1,10 @@
 import type { ExperimentStatus } from "../data/types";
 
 const STYLES: Record<ExperimentStatus, { bg: string; color: string; label: string }> = {
-  active: { bg: "#dcfce7", color: "#15803d", label: "Active" },
-  review: { bg: "#fee2e2", color: "#b91c1c", label: "Review" },
-  complete: { bg: "#dbeafe", color: "#1e40af", label: "Complete" },
-  draft: { bg: "#f1f5f9", color: "#64748b", label: "Draft" },
+  active: { bg: "var(--color-success-bg)", color: "var(--color-success-text)", label: "Active" },
+  review: { bg: "var(--color-danger-bg)", color: "var(--color-danger-text)", label: "Review" },
+  complete: { bg: "var(--color-complete-bg)", color: "var(--color-complete-text)", label: "Complete" },
+  draft: { bg: "var(--color-bg-soft)", color: "var(--color-text-muted)", label: "Draft" },
 };
 
 export function StatusBadge({ status }: { status: ExperimentStatus }) {

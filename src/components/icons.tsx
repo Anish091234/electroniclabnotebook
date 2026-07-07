@@ -103,6 +103,33 @@ export function SparkleIcon({ color = "white", size = 12 }: IconProps) {
   );
 }
 
+export function SunIcon({ color = "currentColor", size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="2.5" stroke={color} strokeWidth="1.3" />
+      <path
+        d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.8 2.8l1.1 1.1M10.1 10.1l1.1 1.1M2.8 11.2l1.1-1.1M10.1 3.9l1.1-1.1"
+        stroke={color}
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function MoonIcon({ color = "currentColor", size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M11.5 8.7A4.8 4.8 0 0 1 5.3 2.5 4.8 4.8 0 1 0 11.5 8.7Z"
+        stroke={color}
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function SearchIcon({ color = "#94a3b8", size = 12 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none">

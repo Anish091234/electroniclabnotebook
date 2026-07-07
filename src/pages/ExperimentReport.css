@@ -1,0 +1,146 @@
+.report-page {
+  min-height: 100vh;
+  background: var(--color-bg-app);
+  padding: 24px;
+  overflow: auto;
+}
+
+.report-actions {
+  max-width: 840px;
+  margin: 0 auto 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.report-back,
+.report-print {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  padding: 7px 12px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font: 600 12px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.report-print {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: white;
+}
+
+.report-sheet {
+  max-width: 840px;
+  margin: 0 auto;
+  background: white;
+  border: 1px solid #e5e7eb;
+  padding: 36px;
+  color: #0f172a;
+}
+
+.report-sheet header {
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 18px;
+  margin-bottom: 22px;
+}
+
+.report-sheet header p {
+  margin: 0 0 4px;
+  color: #64748b;
+  font: 700 11px system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.report-sheet h1 {
+  font: 800 28px/1.15 system-ui, sans-serif;
+  margin: 0 0 10px;
+}
+
+.report-sheet h2 {
+  font: 700 15px system-ui, sans-serif;
+  margin: 24px 0 8px;
+}
+
+.report-sheet p,
+.report-sheet li {
+  font: 400 13px/1.65 system-ui, sans-serif;
+  color: #334155;
+}
+
+.report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-meta span {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font: 600 11px system-ui, sans-serif;
+  color: #475569;
+}
+
+.report-block {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px;
+  margin: 8px 0;
+}
+
+.report-block pre {
+  white-space: pre-wrap;
+  color: #334155;
+  font: 400 12px/1.55 ui-monospace, Menlo, Monaco, monospace;
+}
+
+.report-version {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px;
+  margin: 8px 0;
+}
+
+.report-change-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.report-change-table th,
+.report-change-table td {
+  border: 1px solid #e2e8f0;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+  font: 400 11px/1.4 system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.report-change-table th {
+  width: 28%;
+  color: #0f172a;
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+@media print {
+  .sidebar,
+  .report-actions {
+    display: none !important;
+  }
+
+  .report-page {
+    padding: 0;
+    background: white;
+  }
+
+  .report-sheet {
+    border: none;
+    max-width: none;
+    padding: 0;
+  }
+}

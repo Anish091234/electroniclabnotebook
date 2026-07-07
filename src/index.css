@@ -1,14 +1,21 @@
 :root {
   --color-bg-app: #f3f4f6;
   --color-bg-sidebar: #ffffff;
+  --color-bg-surface: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-subtle: #f8fafc;
+  --color-bg-soft: #f1f5f9;
   --color-border: #e5e7eb;
   --color-border-light: #f1f3f5;
   --color-border-lighter: #f1f5f9;
+  --color-border-strong: #e2e8f0;
 
   --color-primary: #1d4ed8;
   --color-primary-light: #eff6ff;
   --color-primary-border: #bfdbfe;
+  --color-primary-ink: #1e3a8a;
   --color-accent-purple: #7c3aed;
+  --color-accent-purple-light: #f5f3ff;
 
   --color-text-primary: #0f172a;
   --color-text-secondary: #334155;
@@ -25,6 +32,8 @@
   --color-success-icon: #22c55e;
 
   --color-danger-bg: #fee2e2;
+  --color-danger-bg-soft: #fff1f2;
+  --color-danger-border: #fecaca;
   --color-danger-text: #b91c1c;
 
   --color-complete-bg: #dbeafe;
@@ -35,10 +44,71 @@
   --color-warning-text: #d97706;
   --color-warning-icon: #f59e0b;
 
+  --color-modal-overlay: rgba(15, 23, 42, 0.36);
+  --shadow-modal: 0 24px 60px rgba(15, 23, 42, 0.22);
+  --shadow-card: 0 8px 32px rgba(15, 23, 42, 0.06);
+  --gradient-ai-banner: linear-gradient(135deg, var(--color-primary-light), var(--color-accent-purple-light));
+  --gradient-sidebar-ai: linear-gradient(135deg, var(--color-primary), var(--color-accent-purple));
+
   --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, Menlo, Monaco, monospace;
 
   color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --color-bg-app: #101114;
+  --color-bg-sidebar: #15171c;
+  --color-bg-surface: #181b20;
+  --color-bg-elevated: #20242b;
+  --color-bg-subtle: #20242b;
+  --color-bg-soft: #252b33;
+  --color-border: #2c333d;
+  --color-border-light: #252b33;
+  --color-border-lighter: #242a32;
+  --color-border-strong: #3a4350;
+
+  --color-primary: #60a5fa;
+  --color-primary-light: #10243f;
+  --color-primary-border: #1d4e89;
+  --color-primary-ink: #bfdbfe;
+  --color-accent-purple: #c084fc;
+  --color-accent-purple-light: #271d3d;
+
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #d1d5db;
+  --color-text-tertiary: #cbd5e1;
+  --color-text-muted: #9ca3af;
+  --color-text-faint: #7f8a99;
+  --color-text-disabled: #59616e;
+
+  --color-success-bg: #123a26;
+  --color-success-bg-light: #102c20;
+  --color-success-border: #1f6f48;
+  --color-success-text: #86efac;
+  --color-success-text-light: #bbf7d0;
+  --color-success-icon: #4ade80;
+
+  --color-danger-bg: #451a24;
+  --color-danger-bg-soft: #3a1821;
+  --color-danger-border: #7f1d35;
+  --color-danger-text: #fda4af;
+
+  --color-complete-bg: #172554;
+  --color-complete-text: #bfdbfe;
+
+  --color-warning-bg: #352912;
+  --color-warning-border: #7c5d12;
+  --color-warning-text: #fbbf24;
+  --color-warning-icon: #f59e0b;
+
+  --color-modal-overlay: rgba(0, 0, 0, 0.58);
+  --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.46);
+  --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.28);
+  --gradient-ai-banner: linear-gradient(135deg, #10243f, #271d3d);
+  --gradient-sidebar-ai: linear-gradient(135deg, #1d4e89, #6d28d9);
+
+  color-scheme: dark;
 }
 
 * {
@@ -69,6 +139,13 @@ button {
 }
 
 input,
-textarea {
+textarea,
+select {
   font-family: inherit;
+}
+
+input,
+textarea,
+select {
+  color-scheme: inherit;
 }

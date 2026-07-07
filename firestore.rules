@@ -1,0 +1,182 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isLabMember(labId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.status == "active";
+    }
+
+    function isLabAdmin(labId) {
+      return isLabMember(labId)
+        && get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role in ["owner", "admin"];
+    }
+
+    function isLabPi(labId) {
+      return isLabMember(labId)
+        && get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role in ["owner", "pi"];
+    }
+
+    function isLabManager(labId) {
+      return isLabMember(labId)
+        && get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role in ["owner", "admin", "pi"];
+    }
+
+    function canEditLabRecords(labId) {
+      return isLabMember(labId)
+        && get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role in ["owner", "admin", "pi", "researcher"];
+    }
+
+    function isSelfCreatedLab(labId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/labs/$(labId))
+        && get(/databases/$(database)/documents/labs/$(labId)).data.createdByUid == request.auth.uid;
+    }
+
+    function ownsExperiment(data) {
+      return data.keys().hasAny(["ownerUid"]) && data.ownerUid == request.auth.uid;
+    }
+
+    function piOwnsExperiment(data) {
+      return data.keys().hasAny(["piUid"]) && data.piUid == request.auth.uid;
+    }
+
+    function ownsTemplate(data) {
+      return data.keys().hasAny(["createdByUid"]) && data.createdByUid == request.auth.uid;
+    }
+
+    function isInviteRecipient() {
+      return signedIn()
+        && resource.data.status == "pending"
+        && resource.data.email == request.auth.token.email;
+    }
+
+    function canAcceptInvite(labId, data) {
+      return signedIn()
+        && data.keys().hasAll(["inviteId", "email", "role"])
+        && exists(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId))
+        && get(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId)).data.status == "pending"
+        && get(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId)).data.email == request.auth.token.email
+        && data.email == request.auth.token.email
+        && data.role == get(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId)).data.role
+        && (
+          (data.role == "researcher" && data.piUid == get(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId)).data.piUid)
+          || (data.role == "pi" && data.piUid == request.auth.uid)
+          || (data.role == "admin" && data.piUid == null)
+          || (data.role in ["viewer", "external"] && data.piUid == null)
+        );
+    }
+
+    match /users/{uid} {
+      allow read, create, update: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /labs/{labId} {
+      allow create: if signedIn() && request.resource.data.createdByUid == request.auth.uid;
+      allow read: if isLabMember(labId);
+      allow update: if isLabAdmin(labId);
+
+      match /members/{uid} {
+        allow read: if isLabMember(labId);
+        allow create: if isLabAdmin(labId)
+          || (signedIn() && uid == request.auth.uid && isSelfCreatedLab(labId))
+          || (signedIn() && uid == request.auth.uid && canAcceptInvite(labId, request.resource.data));
+        allow update: if isLabAdmin(labId) || (signedIn() && uid == request.auth.uid);
+      }
+
+      match /piGroups/{piUid} {
+        allow read: if isLabMember(labId);
+        allow create: if isLabAdmin(labId)
+          || (signedIn() && piUid == request.auth.uid && isSelfCreatedLab(labId))
+          || (signedIn() && piUid == request.auth.uid && isLabPi(labId));
+        allow update: if isLabAdmin(labId);
+      }
+
+      match /invites/{inviteId} {
+        allow read: if isLabAdmin(labId) || isInviteRecipient();
+        allow create: if isLabAdmin(labId);
+        allow update: if isLabAdmin(labId)
+          || (
+            isInviteRecipient()
+            && request.resource.data.status == "accepted"
+            && request.resource.data.acceptedByUid == request.auth.uid
+            && request.resource.data.email == resource.data.email
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.piUid == resource.data.piUid
+            && request.resource.data.token == resource.data.token
+          );
+      }
+
+      match /experiments/{experimentId} {
+        allow read: if isLabMember(labId);
+        allow create: if canEditLabRecords(labId)
+          && request.resource.data.keys().hasAny(["ownerUid"])
+          && request.resource.data.ownerUid == request.auth.uid;
+        allow update: if isLabAdmin(labId)
+          || (isLabPi(labId) && (piOwnsExperiment(resource.data) || piOwnsExperiment(request.resource.data)))
+          || (canEditLabRecords(labId) && ownsExperiment(resource.data) && request.resource.data.ownerUid == request.auth.uid)
+          || (canEditLabRecords(labId) && !resource.data.keys().hasAny(["ownerUid"]));
+      }
+
+      match /protocolTemplates/{templateId} {
+        allow read: if isLabMember(labId);
+        allow create: if isLabManager(labId)
+          && request.resource.data.keys().hasAny(["createdByUid"])
+          && request.resource.data.createdByUid == request.auth.uid;
+        allow update, delete: if isLabAdmin(labId)
+          || (isLabPi(labId) && (!resource.data.keys().hasAny(["createdByUid"]) || ownsTemplate(resource.data)));
+      }
+
+      match /inventoryItems/{itemId} {
+        allow read: if isLabMember(labId);
+        allow create, update: if isLabManager(labId);
+      }
+
+      match /sampleRecords/{sampleId} {
+        allow read: if isLabMember(labId);
+        allow create, update: if canEditLabRecords(labId);
+      }
+
+      match /projectRecords/{projectId} {
+        allow read: if isLabMember(labId);
+        allow create, update: if isLabManager(labId);
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if isLabMember(labId);
+        allow create: if isLabMember(labId);
+        allow update: if isLabMember(labId);
+      }
+
+      match /collaborationTasks/{taskId} {
+        allow read: if isLabMember(labId);
+        allow create, update: if canEditLabRecords(labId);
+      }
+
+      match /integrationImports/{importId} {
+        allow read: if isLabMember(labId);
+        allow create: if canEditLabRecords(labId);
+        allow update: if isLabManager(labId);
+      }
+
+      match /attachments/{attachmentId} {
+        allow read: if isLabMember(labId);
+        allow create: if isLabMember(labId)
+          && request.resource.data.keys().hasAny(["uploadedByUid"])
+          && request.resource.data.uploadedByUid == request.auth.uid;
+        allow update: if isLabAdmin(labId);
+      }
+
+      match /auditEvents/{eventId} {
+        allow read, create: if isLabMember(labId);
+        allow update, delete: if false;
+      }
+    }
+
+  }
+}

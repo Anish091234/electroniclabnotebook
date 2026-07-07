@@ -1,0 +1,26 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isLabMember(labId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.status == "active";
+    }
+
+    function isLabAdmin(labId) {
+      return isLabMember(labId)
+        && firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role in ["owner", "admin"];
+    }
+
+    match /labs/{labId}/experiments/{experimentId}/{fileName} {
+      allow read: if isLabMember(labId);
+      allow create, update: if isLabMember(labId) && request.resource.size < 25 * 1024 * 1024;
+      allow delete: if isLabAdmin(labId);
+    }
+  }
+}
