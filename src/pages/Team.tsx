@@ -37,6 +37,8 @@ const EMPTY_INVITE_FORM = {
   piUid: "",
 };
 
+type InviteMode = "user" | "pi";
+
 const configuredAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim().replace(/\/+$/, "");
 
 export function Team() {
@@ -52,6 +54,7 @@ export function Team() {
   const [emailPreview, setEmailPreview] = useState<{ to: string; subject: string; body: string; inviteUrl: string } | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [inviteForm, setInviteForm] = useState(EMPTY_INVITE_FORM);
+  const [inviteMode, setInviteMode] = useState<InviteMode>("user");
 
   const canManageInvites = activeMember?.role === "owner" || activeMember?.role === "admin";
   const canManageAccounts = canManageInvites;
@@ -109,6 +112,11 @@ export function Team() {
     [invites],
   );
 
+  const pendingPiInvites = useMemo(
+    () => pendingInvites.filter((invite) => invite.role === "pi"),
+    [pendingInvites],
+  );
+
   const piGroups = useMemo(() => {
     const researchers = members.filter((member) => member.role === "researcher");
     const pendingResearchers = pendingInvites.filter((invite) => invite.role === "researcher");
@@ -127,6 +135,7 @@ export function Team() {
 
   const openInviteModal = (role: InviteRole = "researcher") => {
     setInviteError(null);
+    setInviteMode(role === "pi" ? "pi" : "user");
     setInviteForm({
       ...EMPTY_INVITE_FORM,
       role,
@@ -138,6 +147,7 @@ export function Team() {
   const closeInviteModal = () => {
     setIsInviteOpen(false);
     setInviteForm(EMPTY_INVITE_FORM);
+    setInviteMode("user");
     setIsInviteSubmitting(false);
   };
 
@@ -163,7 +173,7 @@ export function Team() {
     setIsInviteSubmitting(true);
 
     try {
-      await createLabInvite({
+      const invite = await createLabInvite({
         labId: activeLab.id,
         labName: activeLab.name,
         email: inviteForm.email,
@@ -175,6 +185,11 @@ export function Team() {
         appOrigin: configuredAppUrl || window.location.origin,
       });
       closeInviteModal();
+      const email = inviteEmailFor(invite);
+      if (email) {
+        setEmailPreview(email);
+        await copyText(email.body);
+      }
     } catch (err) {
       setInviteError(err instanceof Error ? err.message : "Unable to create invite");
       setIsInviteSubmitting(false);
@@ -218,11 +233,17 @@ export function Team() {
   const inviteEmailFor = (invite: LabInvite) => {
     if (!activeLab || !user) return;
     const role = roleLabel(invite.role).toLowerCase();
-    const subject = `${user.name} invited you to ${activeLab.name} on LabOS`;
+    const subject =
+      invite.role === "pi"
+        ? `${user.name} invited you to join ${activeLab.name} as a PI on LabOS`
+        : `${user.name} invited you to ${activeLab.name} on LabOS`;
     const body = [
       `Hi ${invite.displayName},`,
       "",
       `${user.name} invited you to join ${activeLab.name} as a ${role}.`,
+      ...(invite.role === "pi"
+        ? ["", "When you accept, LabOS will create your PI group so researchers can be assigned under you."]
+        : []),
       "",
       `Accept the invite here: ${inviteUrlFor(invite)}`,
       "",
@@ -354,6 +375,34 @@ export function Team() {
                   </article>
                 ))}
 
+                {pendingPiInvites.map((invite) => (
+                  <article key={invite.id} className="pi-group-card pending-pi-card">
+                    <div className="team-person-row">
+                      <div className="team-avatar muted">{initialsForInvite(invite)}</div>
+                      <div>
+                        <h3>{invite.displayName}</h3>
+                        <span>PI invite pending</span>
+                      </div>
+                    </div>
+
+                    <div className="researcher-list">
+                      <div className="researcher-row pending">
+                        <span>{invite.email}</span>
+                        <small>This PI group will be created after invite acceptance.</small>
+                      </div>
+                    </div>
+
+                    <div className="pi-card-actions">
+                      <button className="invite-cancel-btn" onClick={() => copyInviteLink(invite)}>
+                        {copiedInviteId === invite.id ? "Copied" : "Copy Link"}
+                      </button>
+                      <button className="invite-cancel-btn" onClick={() => openInviteEmail(invite)}>
+                        Email Invite
+                      </button>
+                    </div>
+                  </article>
+                ))}
+
                 {unassignedResearchers.length > 0 && (
                   <article className="pi-group-card">
                     <div className="team-person-row">
@@ -396,7 +445,7 @@ export function Team() {
                         <code className="invite-link-preview">{inviteUrlFor(invite)}</code>
                       </div>
                       <span className="invite-role-pill">{roleLabel(invite.role)}</span>
-                      <span className="invite-meta">{invite.role === "researcher" ? piNameFor(invite.piUid, members) : "Lab-wide"}</span>
+                      <span className="invite-meta">{inviteMetaFor(invite, members)}</span>
                       <button
                         className="invite-cancel-btn"
                         onClick={() => copyInviteLink(invite)}
@@ -491,8 +540,12 @@ export function Team() {
           <form className="team-invite-modal" onSubmit={submitInvite} onMouseDown={(e) => e.stopPropagation()}>
             <div className="experiment-modal-header">
               <div>
-                <h2>Invite User</h2>
-                <p>Add a PI, admin, or researcher to {activeLab?.name}.</p>
+                <h2>{inviteMode === "pi" ? "Add PI" : "Invite User"}</h2>
+                <p>
+                  {inviteMode === "pi"
+                    ? `Create a PI invite link for ${activeLab?.name}.`
+                    : `Add an admin, researcher, viewer, or collaborator to ${activeLab?.name}.`}
+                </p>
               </div>
               <button type="button" className="modal-close" onClick={closeInviteModal}>
                 x
@@ -517,20 +570,28 @@ export function Team() {
               <input
                 value={inviteForm.displayName}
                 onChange={(e) => updateInviteField("displayName", e.target.value)}
-                placeholder="Dr. Maya Patel"
+                placeholder={inviteMode === "pi" ? "Dr. Maya Patel" : "Alex Rivera"}
               />
             </label>
 
-            <label className="modal-field">
-              <span>Role</span>
-              <select value={inviteForm.role} onChange={(e) => updateInviteField("role", e.target.value)}>
-                {INVITE_ROLE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {inviteMode === "pi" ? (
+              <div className="team-fixed-role">
+                <span>Role</span>
+                <strong>PI</strong>
+                <small>A PI group is created automatically after this invite is accepted.</small>
+              </div>
+            ) : (
+              <label className="modal-field">
+                <span>Role</span>
+                <select value={inviteForm.role} onChange={(e) => updateInviteField("role", e.target.value)}>
+                  {INVITE_ROLE_OPTIONS.filter((option) => option.value !== "pi").map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
 
             {inviteForm.role === "researcher" && (
               <label className="modal-field">
@@ -550,7 +611,9 @@ export function Team() {
             )}
 
             <div className="team-invite-note">
-              This creates a pending invite link. On Firebase Spark, use Email Invite or Copy Link to send it without Cloud Functions.
+              {inviteMode === "pi"
+                ? "This creates a pending PI invite link. The PI signs in with the invited email, then LabOS adds them as a PI and creates their PI group."
+                : "This creates a pending invite link. On Firebase Spark, use Email Invite or Copy Link to send it without Cloud Functions."}
             </div>
 
             <div className="experiment-modal-actions">
@@ -558,7 +621,7 @@ export function Team() {
                 Cancel
               </button>
               <button className="btn-primary" type="submit" disabled={isInviteSubmitting}>
-                {isInviteSubmitting ? "Creating..." : "Create Invite"}
+                {isInviteSubmitting ? "Creating..." : inviteMode === "pi" ? "Create PI Invite" : "Create Invite"}
               </button>
             </div>
           </form>
@@ -621,6 +684,13 @@ function initialsFor(member: LabMember) {
   return member.email.slice(0, 2).toUpperCase();
 }
 
+function initialsForInvite(invite: LabInvite) {
+  const parts = invite.displayName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return invite.email.slice(0, 2).toUpperCase();
+}
+
 function roleLabel(role: LabMember["role"] | LabInvite["role"]) {
   if (role === "owner") return "Owner / PI";
   if (role === "pi") return "PI";
@@ -633,4 +703,10 @@ function roleLabel(role: LabMember["role"] | LabInvite["role"]) {
 function piNameFor(piUid: string | null, members: LabMember[]) {
   if (!piUid) return "Unassigned";
   return members.find((member) => member.uid === piUid)?.displayName ?? "Unknown PI";
+}
+
+function inviteMetaFor(invite: LabInvite, members: LabMember[]) {
+  if (invite.role === "researcher") return piNameFor(invite.piUid, members);
+  if (invite.role === "pi") return "PI group on accept";
+  return "Lab-wide";
 }

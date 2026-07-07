@@ -105,6 +105,17 @@
   gap: 12px;
 }
 
+.pi-group-card.pending-pi-card {
+  border-style: dashed;
+  background: var(--color-bg-subtle);
+}
+
+.pi-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .team-person-row {
   display: flex;
   align-items: center;
@@ -345,6 +356,32 @@
   padding: 9px 10px;
   color: var(--color-text-muted);
   font: 400 11.5px/1.5 system-ui, sans-serif;
+}
+
+.team-fixed-role {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-subtle);
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.team-fixed-role span {
+  font: 700 10px system-ui, sans-serif;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.team-fixed-role strong {
+  font: 700 13px system-ui, sans-serif;
+  color: var(--color-text-primary);
+}
+
+.team-fixed-role small {
+  font: 400 11px/1.4 system-ui, sans-serif;
+  color: var(--color-text-muted);
 }
 
 .team-table-wrap {
