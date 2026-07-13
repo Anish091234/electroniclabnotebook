@@ -15,7 +15,6 @@ const EMPTY_FORM = {
   status: "active" as ProjectStatus,
   visibility: "lab" as ProjectVisibility,
   allowedMemberUids: [] as string[],
-  readOnlyShareEnabled: false,
   notebooks: "General Notebook",
   folders: "Planning, Runs, Reports",
   tags: "",
@@ -40,9 +39,8 @@ export function Projects() {
       name: project.name,
       description: project.description,
       status: project.status,
-      visibility: project.visibility ?? "lab",
+      visibility: project.visibility === "restricted" ? "restricted" : "lab",
       allowedMemberUids: project.allowedMemberUids ?? [],
-      readOnlyShareEnabled: project.readOnlyShareEnabled ?? false,
       notebooks: project.notebooks.join(", "),
       folders: project.folders.join(", "),
       tags: project.tags.join(", "),
@@ -67,7 +65,6 @@ export function Projects() {
       status: form.status,
       visibility: form.visibility,
       allowedMemberUids: form.allowedMemberUids,
-      readOnlyShareEnabled: form.readOnlyShareEnabled,
       notebooks: form.notebooks.split(","),
       folders: form.folders.split(","),
       tags: form.tags.split(","),
@@ -104,16 +101,7 @@ export function Projects() {
                   <select value={form.visibility} onChange={(e) => setForm({ ...form, visibility: e.target.value as ProjectVisibility })}>
                     <option value="lab">Lab-wide edit rules</option>
                     <option value="restricted">Restricted project</option>
-                    <option value="read_only_link">Read-only share link</option>
                   </select>
-                </label>
-                <label className="project-toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={form.readOnlyShareEnabled}
-                    onChange={(e) => setForm({ ...form, readOnlyShareEnabled: e.target.checked, visibility: e.target.checked ? "read_only_link" : form.visibility })}
-                  />
-                  Read-only share token
                 </label>
               </div>
               <div className="project-member-picker">
@@ -151,17 +139,11 @@ export function Projects() {
                     <span className="workbench-pill">{projectExperiments.length} experiments</span>
                     <span className="workbench-pill">{project.visibility ?? "lab"}</span>
                     {(project.allowedMemberUids?.length ?? 0) > 0 && <span className="workbench-pill">{project.allowedMemberUids.length} project members</span>}
-                    {project.readOnlyShareEnabled && <span className="workbench-pill primary">read-only share on</span>}
                     {project.notebooks.map((notebook) => <span key={notebook} className="workbench-pill">{notebook}</span>)}
                     {project.folders.map((folder) => <span key={folder} className="workbench-pill">{folder}</span>)}
                   </div>
                   <div className="workbench-actions">
                     {canManageProjects && <button className="btn-secondary" onClick={() => edit(project)}>Edit</button>}
-                    {project.shareToken && (
-                      <button className="btn-secondary" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/projects?projectId=${project.id}&share=${project.shareToken}`)}>
-                        Copy Share Link
-                      </button>
-                    )}
                     <button className="btn-secondary" onClick={() => navigate("/dashboard")}>View Experiments</button>
                   </div>
                 </article>

@@ -6,10 +6,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function hasVerifiedEmail() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
     function isLabMember(labId) {
       return signedIn()
         && exists(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid))
-        && get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.status == "active";
+        && get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.status == "active"
+        // "external" is retained only as a legacy membership value. Until a
+        // scoped-share model exists, it must never grant blanket lab access.
+        && get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role
+          in ["owner", "admin", "pi", "researcher", "viewer"];
     }
 
     function isLabAdmin(labId) {
@@ -42,34 +50,297 @@ service cloud.firestore {
       return data.keys().hasAny(["ownerUid"]) && data.ownerUid == request.auth.uid;
     }
 
+    function labControlFieldsAreStable() {
+      return request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
     function piOwnsExperiment(data) {
       return data.keys().hasAny(["piUid"]) && data.piUid == request.auth.uid;
     }
 
-    function ownsTemplate(data) {
+    // Client-side visibility checks are useful for the interface, but are not
+    // security controls. Keep access decisions here, alongside the data.
+    function canReadProject(data) {
+      return data.visibility != "restricted"
+        || data.allowedMemberUids.hasAny([request.auth.uid]);
+    }
+
+    function projectKeepsOwnerAccess(data) {
+      return data.visibility != "restricted"
+        || data.allowedMemberUids.hasAny([data.ownerUid]);
+    }
+
+    // A share link would be a bearer credential. Until it is implemented as a
+    // trusted, expiring, scoped server workflow, never store one in a project
+    // record that is readable by lab members.
+    function hasNoBrowserShareSecret(data) {
+      return data.get("readOnlyShareEnabled", false) == false
+        && data.get("shareToken", null) == null
+        && data.get("shareCreatedAt", null) == null;
+    }
+
+    function canWriteProject(labId, data) {
+      return isLabAdmin(labId) || (isLabManager(labId) && data.ownerUid == request.auth.uid);
+    }
+
+    function projectControlFieldsAreStable() {
+      return request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.ownerName == resource.data.ownerName
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    // A record owner may edit their unlocked record. A PI may edit records in
+    // their group, and an owner/admin may administer records in the lab.
+    function canEditExperiment(labId, data) {
+      return isLabAdmin(labId)
+        || (isLabPi(labId) && piOwnsExperiment(data))
+        || (canEditLabRecords(labId) && ownsExperiment(data));
+    }
+
+    // These fields establish record ownership and signed-record identity. They
+    // must never be changed as part of a normal edit, even by a lab admin.
+    function controlFieldIsStable(field, defaultValue) {
+      // Review UID provenance was added after early LabOS records existed.
+      // Treat an absent legacy value as null so a normal save can safely
+      // backfill null, but never let a browser introduce a non-null value.
+      return request.resource.data.get(field, defaultValue)
+        == resource.data.get(field, defaultValue);
+    }
+
+    function experimentControlFieldsAreStable() {
+      return request.resource.data.id == resource.data.id
+        && request.resource.data.owner == resource.data.owner
+        && request.resource.data.ownerInitials == resource.data.ownerInitials
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.piUid == resource.data.piUid
+        && request.resource.data.locked == resource.data.locked
+        && request.resource.data.lockedAt == resource.data.lockedAt
+        && request.resource.data.lockedBy == resource.data.lockedBy
+        && controlFieldIsStable("lockedByUid", null)
+        && controlFieldIsStable("lockedAtServer", null)
+        && controlFieldIsStable("modifiedAtServer", null)
+        && request.resource.data.signatures == resource.data.signatures
+        && request.resource.data.attachmentIds == resource.data.attachmentIds
+        && request.resource.data.versionNumber == resource.data.versionNumber
+        && request.resource.data.revisionNumber == resource.data.revisionNumber
+        && request.resource.data.parentExperimentId == resource.data.parentExperimentId
+        && request.resource.data.history == resource.data.history
+        && request.resource.data.versions == resource.data.versions
+        && request.resource.data.reviewStatus == resource.data.reviewStatus
+        && request.resource.data.reviewRequestedAt == resource.data.reviewRequestedAt
+        && request.resource.data.reviewRequestedBy == resource.data.reviewRequestedBy
+        && controlFieldIsStable("reviewRequestedByUid", null)
+        && request.resource.data.reviewDecisionAt == resource.data.reviewDecisionAt
+        && request.resource.data.reviewDecisionBy == resource.data.reviewDecisionBy
+        && controlFieldIsStable("reviewDecisionByUid", null)
+        && request.resource.data.reviewAssignedToUid == resource.data.reviewAssignedToUid
+        && request.resource.data.reviewAssignedToName == resource.data.reviewAssignedToName
+        && request.resource.data.reviewDueDate == resource.data.reviewDueDate
+        && request.resource.data.reviewComment == resource.data.reviewComment
+        && controlFieldIsStable("reviewEvents", []);
+    }
+
+    function clientExperimentWorkflowIsSafe() {
+      return resource.data.reviewStatus in ["none", "rejected", "amendment"]
+        && request.resource.data.status in ["draft", "active"];
+    }
+
+    // Browser edits may change ordinary draft content only. Server-owned
+    // review/signature/evidence provenance and arbitrary new top-level fields
+    // are excluded. The two review UIDs and empty review-event array appear
+    // only to let legacy records add safe defaults; controlFieldIsStable still
+    // rejects forged IDs or review history.
+    function clientExperimentChangesAreAllowed() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name", "project", "projectId", "notebook", "status", "modified", "modifiedAt",
+          "tags", "archived", "isFavorite", "objective", "notes", "observations",
+          "protocolTemplateId", "protocolTemplateVersion", "protocol", "aiInsights", "comments",
+          "authoringBlocks", "dueDate", "reviewRequestedByUid", "reviewDecisionByUid", "reviewEvents"
+        ]);
+    }
+
+    function clientExperimentContentShapeIsSafe() {
+      return request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 200
+        && request.resource.data.project is string
+        && request.resource.data.project.size() > 0 && request.resource.data.project.size() <= 200
+        && request.resource.data.notebook is string
+        && request.resource.data.notebook.size() > 0 && request.resource.data.notebook.size() <= 200
+        && request.resource.data.objective is string && request.resource.data.objective.size() <= 10000
+        && request.resource.data.notes is string && request.resource.data.notes.size() <= 100000
+        && request.resource.data.observations is string && request.resource.data.observations.size() <= 100000
+        && request.resource.data.tags is list && request.resource.data.tags.size() <= 20
+        && request.resource.data.protocol is list
+        && request.resource.data.protocol.size() > 0 && request.resource.data.protocol.size() <= 100
+        && request.resource.data.aiInsights is list && request.resource.data.aiInsights.size() <= 20
+        && request.resource.data.comments is list && request.resource.data.comments.size() <= 500
+        && request.resource.data.authoringBlocks is list && request.resource.data.authoringBlocks.size() <= 100
+        && (request.resource.data.projectId == null || (request.resource.data.projectId is string && request.resource.data.projectId.size() <= 128))
+        && (request.resource.data.protocolTemplateId == null || (request.resource.data.protocolTemplateId is string && request.resource.data.protocolTemplateId.size() <= 128))
+        && (request.resource.data.protocolTemplateVersion == null || request.resource.data.protocolTemplateVersion is int)
+        && (request.resource.data.dueDate == null || (request.resource.data.dueDate is string && request.resource.data.dueDate.size() <= 64));
+    }
+
+    function isSignedOwnedExperiment(labId, experimentId) {
+      return experimentId is string
+        && experimentId.size() > 0
+        && experimentId.size() <= 128
+        && !experimentId.matches(".*[/].*")
+        && exists(/databases/$(database)/documents/labs/$(labId)/experiments/$(experimentId))
+        && get(/databases/$(database)/documents/labs/$(labId)/experiments/$(experimentId)).data.locked == true
+        && get(/databases/$(database)/documents/labs/$(labId)/experiments/$(experimentId)).data.ownerUid == request.auth.uid;
+    }
+
+    function freshReviewFieldsAreEmpty(data) {
+      return data.reviewRequestedAt == null
+        && data.reviewRequestedBy == null
+        && data.reviewRequestedByUid == null
+        && data.reviewDecisionAt == null
+        && data.reviewDecisionBy == null
+        && data.reviewDecisionByUid == null
+        && data.reviewAssignedToUid == null
+        && data.reviewAssignedToName == null
+        && data.reviewDueDate == null;
+    }
+
+    function hasValidNewRecordLineage(data, labId) {
+      return (data.reviewStatus == "none"
+          && data.parentExperimentId == null
+          && data.reviewComment == null)
+        || (data.reviewStatus == "amendment"
+          && data.reviewComment is string
+          && data.reviewComment.size() > 0
+          && data.reviewComment.size() <= 2000
+          && isSignedOwnedExperiment(labId, data.parentExperimentId));
+    }
+
+    function isSafeExperimentCreate(data, labId, experimentId) {
+      return data.keys().hasOnly([
+          "id", "name", "project", "projectId", "notebook", "status", "modified", "modifiedAt",
+          "owner", "ownerUid", "ownerInitials", "piUid", "tags", "archived", "isFavorite",
+          "locked", "lockedAt", "lockedBy", "reviewStatus", "versionNumber", "revisionNumber",
+          "parentExperimentId", "objective", "notes", "observations", "protocolTemplateId",
+          "protocolTemplateVersion", "protocol", "aiInsights", "comments", "history", "attachmentIds",
+          "authoringBlocks", "signatures", "versions", "reviewRequestedAt", "reviewRequestedBy",
+          "reviewRequestedByUid", "reviewDecisionAt", "reviewDecisionBy", "reviewDecisionByUid",
+          "reviewAssignedToUid", "reviewAssignedToName", "reviewDueDate", "reviewComment", "reviewEvents", "dueDate"
+        ])
+        // The browser always creates the full current record shape. Requiring
+        // every field prevents a new document from omitting a server-controlled
+        // field and exploiting legacy-compatible update handling later.
+        && data.keys().hasAll([
+          "id", "name", "project", "projectId", "notebook", "status", "modified", "modifiedAt",
+          "owner", "ownerUid", "ownerInitials", "piUid", "tags", "archived", "isFavorite",
+          "locked", "lockedAt", "lockedBy", "reviewStatus", "versionNumber", "revisionNumber",
+          "parentExperimentId", "objective", "notes", "observations", "protocolTemplateId",
+          "protocolTemplateVersion", "protocol", "aiInsights", "comments", "history", "attachmentIds",
+          "authoringBlocks", "signatures", "versions", "reviewRequestedAt", "reviewRequestedBy",
+          "reviewRequestedByUid", "reviewDecisionAt", "reviewDecisionBy", "reviewDecisionByUid",
+          "reviewAssignedToUid", "reviewAssignedToName", "reviewDueDate", "reviewComment", "reviewEvents", "dueDate"
+        ])
+        && data.id is string && data.id == experimentId
+        && data.ownerUid == request.auth.uid
+        && data.owner is string && data.owner.size() > 0 && data.owner.size() <= 160
+        && data.ownerInitials is string && data.ownerInitials.size() <= 16
+        && (data.piUid == null || (data.piUid is string && data.piUid.size() <= 128))
+        && data.project is string && data.project.size() > 0 && data.project.size() <= 200
+        && (data.projectId == null || (data.projectId is string && data.projectId.size() <= 128))
+        && data.notebook is string && data.notebook.size() > 0 && data.notebook.size() <= 200
+        && data.modified is string && data.modified.size() <= 120
+        && data.modifiedAt is string && data.modifiedAt.size() <= 64
+        && data.archived is bool
+        && data.isFavorite is bool
+        && data.locked == false
+        && data.lockedAt == null
+        && data.lockedBy == null
+        && data.signatures.size() == 0
+        && data.attachmentIds.size() == 0
+        && data.history.size() == 0
+        && data.versions.size() == 0
+        && data.revisionNumber == 0
+        && data.status == "draft"
+        && data.reviewStatus in ["none", "amendment"]
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.objective is string && data.objective.size() <= 10000
+        && data.notes is string && data.notes.size() <= 100000
+        && data.observations is string && data.observations.size() <= 100000
+        && data.tags is list && data.tags.size() <= 20
+        && data.protocol is list && data.protocol.size() > 0 && data.protocol.size() <= 100
+        && (data.protocolTemplateId == null || (data.protocolTemplateId is string && data.protocolTemplateId.size() <= 128))
+        && (data.protocolTemplateVersion == null || data.protocolTemplateVersion is int)
+        && data.aiInsights is list && data.aiInsights.size() <= 20
+        && data.authoringBlocks is list && data.authoringBlocks.size() <= 100
+        && data.comments is list && data.comments.size() == 0
+        && data.reviewEvents is list && data.reviewEvents.size() == 0
+        && (data.dueDate == null || (data.dueDate is string && data.dueDate.size() <= 64))
+        && freshReviewFieldsAreEmpty(data)
+        && hasValidNewRecordLineage(data, labId)
+        && data.versionNumber is int && data.versionNumber >= 1;
+    }
+
+    function templateCreatorFieldsAreStable() {
+      return request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function inventoryCreatorFieldsAreStable() {
+      return request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function sampleOwnerFieldsAreStable() {
+      return request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.owner == resource.data.owner
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function ownsSampleRecord(data) {
+      return data.keys().hasAny(["ownerUid"]) && data.ownerUid == request.auth.uid;
+    }
+
+    function canManageSampleRecord(labId, data) {
+      // Researchers can edit only their own registry records. Owners/admins
+      // and PIs retain the existing lab-administration/supervision ability.
+      return isLabAdmin(labId)
+        || isLabPi(labId)
+        || (canEditLabRecords(labId) && ownsSampleRecord(data));
+    }
+
+    function taskCreatorFieldsAreStable() {
+      return request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function ownsCollaborationTask(data) {
       return data.keys().hasAny(["createdByUid"]) && data.createdByUid == request.auth.uid;
     }
 
-    function isInviteRecipient() {
-      return signedIn()
-        && resource.data.status == "pending"
-        && resource.data.email == request.auth.token.email;
+    function canManageCollaborationTask(labId, data) {
+      // A researcher cannot modify a peer's task, including only its status.
+      // Owners/admins and PIs retain the existing management/supervision path.
+      return isLabAdmin(labId)
+        || isLabPi(labId)
+        || (canEditLabRecords(labId) && ownsCollaborationTask(data));
     }
 
-    function canAcceptInvite(labId, data) {
-      return signedIn()
-        && data.keys().hasAll(["inviteId", "email", "role"])
-        && exists(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId))
-        && get(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId)).data.status == "pending"
-        && get(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId)).data.email == request.auth.token.email
-        && data.email == request.auth.token.email
-        && data.role == get(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId)).data.role
-        && (
-          (data.role == "researcher" && data.piUid == get(/databases/$(database)/documents/labs/$(labId)/invites/$(data.inviteId)).data.piUid)
-          || (data.role == "pi" && data.piUid == request.auth.uid)
-          || (data.role == "admin" && data.piUid == null)
-          || (data.role in ["viewer", "external"] && data.piUid == null)
-        );
+    function importCreatorFieldsAreStable() {
+      return request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function onlyAddsOwnNotificationRead() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readBy"])
+        && request.resource.data.readBy.hasAll(resource.data.readBy)
+        && !resource.data.readBy.hasAny([request.auth.uid])
+        && request.resource.data.readBy.hasAny([request.auth.uid])
+        && request.resource.data.readBy.size() == resource.data.readBy.size() + 1;
+    }
+
+    function ownsTemplate(data) {
+      return data.keys().hasAny(["createdByUid"]) && data.createdByUid == request.auth.uid;
     }
 
     match /users/{uid} {
@@ -77,57 +348,66 @@ service cloud.firestore {
     }
 
     match /labs/{labId} {
-      allow create: if signedIn() && request.resource.data.createdByUid == request.auth.uid;
+      allow create: if hasVerifiedEmail() && request.resource.data.createdByUid == request.auth.uid;
       allow read: if isLabMember(labId);
-      allow update: if isLabAdmin(labId);
+      allow update: if isLabAdmin(labId) && labControlFieldsAreStable();
 
       match /members/{uid} {
         allow read: if isLabMember(labId);
-        allow create: if isLabAdmin(labId)
-          || (signedIn() && uid == request.auth.uid && isSelfCreatedLab(labId))
-          || (signedIn() && uid == request.auth.uid && canAcceptInvite(labId, request.resource.data));
-        allow update: if isLabAdmin(labId)
-          || (
-            signedIn()
-            && uid == request.auth.uid
-            && request.resource.data.role == resource.data.role
-            && request.resource.data.status == resource.data.status
-            && request.resource.data.piUid == resource.data.piUid
-          );
+        // Invite acceptance and role/status changes are trusted callable
+        // transactions. This prevents an admin or a recipient from promoting
+        // a browser-created member document.
+        allow create: if hasVerifiedEmail() && uid == request.auth.uid && isSelfCreatedLab(labId);
+        allow update, delete: if false;
       }
 
       match /piGroups/{piUid} {
         allow read: if isLabMember(labId);
-        allow create: if isLabAdmin(labId)
-          || (signedIn() && piUid == request.auth.uid && isSelfCreatedLab(labId))
-          || (signedIn() && piUid == request.auth.uid && isLabPi(labId));
-        allow update: if isLabAdmin(labId);
+        allow create: if signedIn() && piUid == request.auth.uid && isSelfCreatedLab(labId);
+        allow update, delete: if false;
+      }
+
+      match /ownershipTransfers/{transferId} {
+        // A handoff record is visible only to its current owner and proposed
+        // owner. Every mutation is a server-side, two-person transaction.
+        allow read: if isLabMember(labId)
+          && (resource.data.initiatedByUid == request.auth.uid
+            || resource.data.targetUid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+
+      match /ownershipTransferState/{stateId} {
+        // This single-document lock prevents parallel transfer requests. It is
+        // strictly server-only so a browser cannot bypass the handoff state.
+        allow read, create, update, delete: if false;
       }
 
       match /invites/{inviteId} {
-        allow read: if isLabAdmin(labId) || isInviteRecipient();
-        allow create: if isLabAdmin(labId);
-        allow update: if isLabAdmin(labId)
-          || (
-            isInviteRecipient()
-            && request.resource.data.status == "accepted"
-            && request.resource.data.acceptedByUid == request.auth.uid
-            && request.resource.data.email == resource.data.email
-            && request.resource.data.role == resource.data.role
-            && request.resource.data.piUid == resource.data.piUid
-            && request.resource.data.token == resource.data.token
-          );
+        // Invite lifecycle is a verified-email, one-time-token transaction in
+        // Cloud Functions. Browser clients must never read or write the
+        // verifier, acceptance state, or invitation address directly.
+        allow read: if isLabAdmin(labId);
+        allow create, update, delete: if false;
+      }
+
+      match /inviteSecrets/{inviteId} {
+        // This contains the one-time token verifier. Only Admin SDK code in
+        // the trusted invite callable may access it.
+        allow read, create, update, delete: if false;
       }
 
       match /experiments/{experimentId} {
         allow read: if isLabMember(labId);
         allow create: if canEditLabRecords(labId)
-          && request.resource.data.keys().hasAny(["ownerUid"])
-          && request.resource.data.ownerUid == request.auth.uid;
-        allow update: if isLabAdmin(labId)
-          || (isLabPi(labId) && (piOwnsExperiment(resource.data) || piOwnsExperiment(request.resource.data)))
-          || (canEditLabRecords(labId) && ownsExperiment(resource.data) && request.resource.data.ownerUid == request.auth.uid)
-          || (canEditLabRecords(labId) && !resource.data.keys().hasAny(["ownerUid"]));
+          && isSafeExperimentCreate(request.resource.data, labId, experimentId);
+        allow update: if (canEditExperiment(labId, resource.data)
+            && resource.data.locked == false
+            && request.resource.data.locked == false
+            && clientExperimentWorkflowIsSafe()
+            && experimentControlFieldsAreStable()
+            && clientExperimentChangesAreAllowed()
+            && clientExperimentContentShapeIsSafe());
+        allow delete: if false;
       }
 
       match /protocolTemplates/{templateId} {
@@ -135,52 +415,76 @@ service cloud.firestore {
         allow create: if isLabManager(labId)
           && request.resource.data.keys().hasAny(["createdByUid"])
           && request.resource.data.createdByUid == request.auth.uid;
-        allow update, delete: if isLabAdmin(labId)
-          || (isLabPi(labId) && (!resource.data.keys().hasAny(["createdByUid"]) || ownsTemplate(resource.data)));
+        allow update: if (isLabAdmin(labId) || (isLabPi(labId) && ownsTemplate(resource.data)))
+          && templateCreatorFieldsAreStable();
+        allow delete: if isLabAdmin(labId) || (isLabPi(labId) && ownsTemplate(resource.data));
       }
 
       match /inventoryItems/{itemId} {
         allow read: if isLabMember(labId);
-        allow create, update: if isLabManager(labId);
+        allow create: if isLabManager(labId)
+          && request.resource.data.createdByUid == request.auth.uid;
+        allow update: if isLabManager(labId) && inventoryCreatorFieldsAreStable();
       }
 
       match /sampleRecords/{sampleId} {
         allow read: if isLabMember(labId);
-        allow create, update: if canEditLabRecords(labId);
+        allow create: if canEditLabRecords(labId)
+          && request.resource.data.ownerUid == request.auth.uid;
+        allow update: if canManageSampleRecord(labId, resource.data)
+          && sampleOwnerFieldsAreStable();
       }
 
       match /projectRecords/{projectId} {
-        allow read: if isLabMember(labId);
-        allow create, update: if isLabManager(labId);
+        allow read: if isLabMember(labId) && canReadProject(resource.data);
+        allow create: if canWriteProject(labId, request.resource.data)
+          && request.resource.data.ownerUid == request.auth.uid
+          && projectKeepsOwnerAccess(request.resource.data)
+          && hasNoBrowserShareSecret(request.resource.data);
+        allow update: if canWriteProject(labId, resource.data)
+          && projectControlFieldsAreStable()
+          && projectKeepsOwnerAccess(request.resource.data)
+          && hasNoBrowserShareSecret(request.resource.data);
+        allow delete: if false;
       }
 
       match /notifications/{notificationId} {
         allow read: if isLabMember(labId);
-        allow create: if isLabMember(labId);
-        allow update: if isLabMember(labId);
+        allow create: if isLabMember(labId)
+          && request.resource.data.createdByUid == request.auth.uid;
+        allow update: if isLabMember(labId) && onlyAddsOwnNotificationRead();
       }
 
       match /collaborationTasks/{taskId} {
         allow read: if isLabMember(labId);
-        allow create, update: if canEditLabRecords(labId);
+        allow create: if canEditLabRecords(labId)
+          && request.resource.data.createdByUid == request.auth.uid;
+        allow update: if canManageCollaborationTask(labId, resource.data)
+          && taskCreatorFieldsAreStable();
       }
 
       match /integrationImports/{importId} {
         allow read: if isLabMember(labId);
-        allow create: if canEditLabRecords(labId);
-        allow update: if isLabManager(labId);
+        allow create: if canEditLabRecords(labId)
+          && request.resource.data.createdByUid == request.auth.uid;
+        allow update: if isLabManager(labId) && importCreatorFieldsAreStable();
       }
 
       match /attachments/{attachmentId} {
         allow read: if isLabMember(labId);
-        allow create: if isLabMember(labId)
-          && request.resource.data.keys().hasAny(["uploadedByUid"])
-          && request.resource.data.uploadedByUid == request.auth.uid;
-        allow update: if isLabAdmin(labId);
+        // Attachment metadata is written only by finalizeAttachment after it
+        // verifies the immutable Storage object, uploader, generation, and
+        // SHA-256. A browser must never be able to invent a download URL or
+        // link an arbitrary object to an experiment.
+        allow create, update, delete: if false;
       }
 
       match /auditEvents/{eventId} {
-        allow read, create: if isLabMember(labId);
+        allow read: if isLabMember(labId);
+        // Audit events are written only by the authenticated server trigger.
+        // Admin SDK writes bypass client rules, while every browser write is
+        // denied so the audit history cannot be fabricated or backdated.
+        allow create: if false;
         allow update, delete: if false;
       }
     }

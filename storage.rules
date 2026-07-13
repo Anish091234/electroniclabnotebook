@@ -9,18 +9,89 @@ service firebase.storage {
     function isLabMember(labId) {
       return signedIn()
         && firestore.exists(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid))
-        && firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.status == "active";
+        && firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.status == "active"
+        // "external" has no Storage access until a scoped-share feature is
+        // designed and enforced across Firestore and Storage.
+        && firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role
+          in ["owner", "admin", "pi", "researcher", "viewer"];
     }
 
-    function isLabAdmin(labId) {
+    function memberRole(labId) {
+      return firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role;
+    }
+
+    function experimentExists(labId, experimentId) {
+      return firestore.exists(/databases/(default)/documents/labs/$(labId)/experiments/$(experimentId));
+    }
+
+    function experimentAcceptsAttachments(labId, experimentId) {
+      // The evidence set is part of what the independent reviewer approves.
+      // Do not let an editor add files while review is requested/approved, even
+      // though the record has not yet received its final signature lock.
+      return firestore.get(/databases/(default)/documents/labs/$(labId)/experiments/$(experimentId)).data.locked == false
+        && firestore.get(/databases/(default)/documents/labs/$(labId)/experiments/$(experimentId)).data.reviewStatus in ["none", "rejected", "amendment"];
+    }
+
+    function canEditExperimentAttachment(labId, experimentId) {
       return isLabMember(labId)
-        && firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role in ["owner", "admin"];
+        && experimentExists(labId, experimentId)
+        && experimentAcceptsAttachments(labId, experimentId)
+        && (
+          memberRole(labId) in ["owner", "admin"]
+          || firestore.get(/databases/(default)/documents/labs/$(labId)/experiments/$(experimentId)).data.ownerUid == request.auth.uid
+          || (
+            memberRole(labId) in ["owner", "pi"]
+            && firestore.get(/databases/(default)/documents/labs/$(labId)/experiments/$(experimentId)).data.piUid == request.auth.uid
+          )
+        );
+    }
+
+    function permittedContentType() {
+      return request.resource.contentType.matches(
+        "^(application/pdf|application/(zip|x-zip-compressed|vnd\\.ms-excel|vnd\\.openxmlformats-officedocument\\.spreadsheetml\\.sheet)|text/(plain|csv|tab-separated-values)|image/(png|jpeg|tiff))$"
+      );
+    }
+
+    function isCanonicalAttachmentId(fileName) {
+      return fileName.matches("^[A-Za-z0-9_-]{12,128}$");
+    }
+
+    function uploadMetadataMatches(labId, experimentId, attachmentId) {
+      // Keep object metadata to the four fields checked by finalizeAttachment.
+      // Otherwise an uploader could smuggle arbitrary data into metadata that
+      // every lab member can read with the object.
+      return request.resource.metadata.keys().hasOnly(["labId", "experimentId", "attachmentId", "uploaderUid"])
+        && request.resource.metadata.labId == labId
+        && request.resource.metadata.experimentId == experimentId
+        && request.resource.metadata.attachmentId == attachmentId
+        && request.resource.metadata.uploaderUid == request.auth.uid;
+    }
+
+    function hasFinalizedAttachmentRecord(labId, experimentId, attachmentId) {
+      return firestore.exists(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId))
+        && firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.experimentId == experimentId
+        && firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.storagePath
+          == "labs/" + labId + "/experiments/" + experimentId + "/" + attachmentId
+        && firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.state == "finalized";
     }
 
     match /labs/{labId}/experiments/{experimentId}/{fileName} {
-      allow read: if isLabMember(labId);
-      allow create, update: if isLabMember(labId) && request.resource.size < 25 * 1024 * 1024;
-      allow delete: if isLabAdmin(labId);
+      // Uploaded bytes remain private until finalizeAttachment records a
+      // server-verified metadata row. This prevents abandoned or malformed
+      // uploads from becoming lab-visible evidence.
+      allow read: if isLabMember(labId)
+        && hasFinalizedAttachmentRecord(labId, experimentId, fileName);
+      // Evidence objects are append-only. A new object may only be added to an
+      // editable, non-review record by a permitted editor; no browser client
+      // can overwrite/delete bytes or add evidence after review begins.
+      allow create: if resource == null
+        && canEditExperimentAttachment(labId, experimentId)
+        && request.resource.size > 0
+        && request.resource.size < 25 * 1024 * 1024
+        && permittedContentType()
+        && isCanonicalAttachmentId(fileName)
+        && uploadMetadataMatches(labId, experimentId, fileName);
+      allow update, delete: if false;
     }
   }
 }

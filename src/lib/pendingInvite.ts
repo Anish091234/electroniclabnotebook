@@ -7,7 +7,15 @@ export interface PendingInvite {
 }
 
 export function inviteFromSearch(search: string): PendingInvite | null {
-  const params = new URLSearchParams(search);
+  return inviteFromParams(search);
+}
+
+export function inviteFromFragment(hash: string): PendingInvite | null {
+  return inviteFromParams(hash.startsWith("#") ? hash.slice(1) : hash);
+}
+
+function inviteFromParams(value: string): PendingInvite | null {
+  const params = new URLSearchParams(value);
   const labId = params.get("labId");
   const inviteId = params.get("inviteId");
   const token = params.get("invite");
@@ -20,8 +28,10 @@ export function rememberInvite(invite: PendingInvite | null) {
   window.sessionStorage.setItem(PENDING_INVITE_KEY, JSON.stringify(invite));
 }
 
-export function rememberInviteFromSearch(search: string) {
-  const invite = inviteFromSearch(search);
+export function rememberInviteFromLocation(search: string, hash: string) {
+  // New links keep the bearer token in the fragment, which browsers do not
+  // transmit to hosting/access logs. Keep query support only for older links.
+  const invite = inviteFromFragment(hash) ?? inviteFromSearch(search);
   rememberInvite(invite);
   return invite;
 }
@@ -29,7 +39,7 @@ export function rememberInviteFromSearch(search: string) {
 export function getPendingInvite() {
   if (typeof window === "undefined") return null;
 
-  const fromUrl = inviteFromSearch(window.location.search);
+  const fromUrl = inviteFromFragment(window.location.hash) ?? inviteFromSearch(window.location.search);
   if (fromUrl) {
     rememberInvite(fromUrl);
     return fromUrl;

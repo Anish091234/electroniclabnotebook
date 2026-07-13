@@ -96,6 +96,24 @@ export interface SignatureRecord {
   meaning: "author" | "reviewer" | "approver";
   comment: string;
   signedAt: string;
+  manifestSha256?: string;
+}
+
+export interface ExperimentIntegrityReport {
+  verified: boolean;
+  signatureId: string | null;
+  signedAt: string | null;
+  manifestSha256: string | null;
+  computedManifestSha256: string;
+  attachmentCount: number;
+  checks: {
+    signedAndLocked: boolean;
+    signaturePresent: boolean;
+    signatureMatchesOwner: boolean;
+    manifestMatches: boolean;
+    attachmentEvidenceMatches: boolean;
+  };
+  failures: string[];
 }
 
 export interface ExperimentVersion {
@@ -111,6 +129,18 @@ export interface ExperimentVersion {
   deviceLabel?: string;
   fieldChanges?: AuditFieldChange[];
   snapshotSummary: string;
+}
+
+export interface ReviewEvent {
+  id: string;
+  kind: "requested" | "approved" | "rejected";
+  actorUid: string;
+  actorName: string;
+  reviewerUid: string;
+  reviewerName: string;
+  comment: string | null;
+  dueDate: string | null;
+  occurredAt: string;
 }
 
 export interface ExperimentDetail extends Experiment {
@@ -129,18 +159,21 @@ export interface ExperimentDetail extends Experiment {
   versions: ExperimentVersion[];
   reviewRequestedAt?: string | null;
   reviewRequestedBy?: string | null;
+  reviewRequestedByUid?: string | null;
   reviewDecisionAt?: string | null;
   reviewDecisionBy?: string | null;
+  reviewDecisionByUid?: string | null;
   reviewAssignedToUid?: string | null;
   reviewAssignedToName?: string | null;
   reviewDueDate?: string | null;
   reviewComment?: string | null;
+  reviewEvents?: ReviewEvent[];
   lockedAt?: string | null;
   lockedBy?: string | null;
   dueDate?: string | null;
 }
 
-export type AuditEventKind = "experiment" | "protocol" | "comment" | "system";
+export type AuditEventKind = "experiment" | "protocol" | "comment" | "attachment" | "project" | "task" | "notification" | "integration" | "system";
 
 export type AuditTargetType =
   | "experiment"
@@ -160,7 +193,7 @@ export interface AuditEvent {
   id: string;
   kind: AuditEventKind;
   actor: string;
-  actorUid?: string;
+  actorUid?: string | null;
   action: string;
   targetId: string;
   targetLabel: string;
@@ -169,6 +202,7 @@ export interface AuditEvent {
   timestamp: string;
   timestampIso?: string;
   timestampServer?: unknown;
+  authType?: string;
   deviceId?: string;
   deviceLabel?: string;
   sessionId?: string;
@@ -248,10 +282,13 @@ export interface AttachmentRecord {
   contentType: string;
   size: number;
   storagePath: string;
-  downloadURL: string;
+  generation: string;
+  sha256: string;
+  state: "finalized";
   uploadedBy: string;
   uploadedByUid?: string;
   uploadedAt: string;
+  finalizedAt?: string;
 }
 
 export interface SaveProtocolTemplateInput {
@@ -307,7 +344,7 @@ export interface SaveSampleInput {
 }
 
 export type ProjectStatus = "active" | "paused" | "archived";
-export type ProjectVisibility = "lab" | "restricted" | "read_only_link";
+export type ProjectVisibility = "lab" | "restricted";
 
 export interface ProjectRecord {
   id: string;
@@ -316,9 +353,6 @@ export interface ProjectRecord {
   status: ProjectStatus;
   visibility: ProjectVisibility;
   allowedMemberUids: string[];
-  readOnlyShareEnabled: boolean;
-  shareToken?: string | null;
-  shareCreatedAt?: string | null;
   ownerUid: string;
   ownerName: string;
   notebooks: string[];
@@ -335,7 +369,6 @@ export interface SaveProjectInput {
   status: ProjectStatus;
   visibility?: ProjectVisibility;
   allowedMemberUids?: string[];
-  readOnlyShareEnabled?: boolean;
   notebooks: string[];
   folders: string[];
   tags: string[];
@@ -345,6 +378,7 @@ export type NotificationKind = "review" | "comment" | "inventory" | "invite" | "
 
 export interface NotificationRecord {
   id: string;
+  createdByUid: string;
   kind: NotificationKind;
   title: string;
   body: string;
@@ -394,6 +428,7 @@ export interface IntegrationImport {
   mapping?: Record<string, string>;
   validationIssues?: string[];
   createdBy: string;
+  createdByUid: string;
   createdAt: string;
 }
 

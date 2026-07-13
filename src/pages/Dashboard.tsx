@@ -1,28 +1,30 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import "./ExperimentsBoard.css";
-import { SearchIcon } from "../components/icons";
-import type { Experiment, ExperimentStatus } from "../data/types";
+import "./Dashboard.css";
+import "./CompetitivePages.css";
+import { StatusBadge } from "../components/StatusBadge";
+import { SearchIcon, AlertIcon } from "../components/icons";
+import type { ExperimentStatus } from "../data/types";
 import { useLabData } from "../contexts/LabDataContext";
 import { useAuth } from "../contexts/AuthContext";
 
-interface ColumnDef {
-  key: ExperimentStatus;
-  label: string;
-  dot: string;
-}
+type TabKey = "all" | "active" | "review" | "complete" | "draft";
+type AttentionTone = "urgent" | "normal";
 
-const COLUMNS: ColumnDef[] = [
-  { key: "draft", label: "Draft", dot: "#9ca3af" },
-  { key: "active", label: "Active", dot: "#4ade80" },
-  { key: "review", label: "Review", dot: "#f87171" },
-  { key: "complete", label: "Complete", dot: "#93c5fd" },
-];
+interface AttentionItem {
+  id: string;
+  title: string;
+  body: string;
+  action: string;
+  experimentId: string;
+  tone: AttentionTone;
+}
 
 export function Dashboard() {
   const navigate = useNavigate();
   const { activeMember } = useAuth();
   const { experiments, experimentDetails, protocolTemplates, projectRecords, error: labDataError, createExperiment } = useLabData();
+  const [tab, setTab] = useState<TabKey>("all");
   const [query, setQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -38,38 +40,111 @@ export function Dashboard() {
     dueDate: "",
   });
 
-  const normalizedQuery = query.toLowerCase();
-  const matchesQuery = (e: Experiment) =>
-    !normalizedQuery ||
-    e.name.toLowerCase().includes(normalizedQuery) ||
-    e.id.toLowerCase().includes(normalizedQuery) ||
-    e.project.toLowerCase().includes(normalizedQuery) ||
-    e.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery));
-
-  const columns = useMemo(
-    () =>
-      COLUMNS.map((col) => {
-        const cards = experiments
-          .filter((e) => e.status === col.key)
-          .filter(matchesQuery)
-          .map((e) => {
-            const detail = experimentDetails[e.id];
-            const done = detail?.protocol.filter((s) => s.status === "done").length ?? 0;
-            const total = detail?.protocol.length ?? 0;
-            return {
-              id: e.id,
-              name: e.name,
-              owner: e.owner,
-              modified: e.modified,
-              hasProgress: col.key === "active",
-              progressPct: total ? Math.round((done / total) * 100) : 0,
-            };
-          });
-        return { ...col, cards };
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [experiments, experimentDetails, normalizedQuery],
+  const tabs: { key: TabKey; label: string; count: number }[] = useMemo(
+    () => [
+      { key: "all", label: "All", count: experiments.length },
+      {
+        key: "active",
+        label: "Active",
+        count: experiments.filter((e) => e.status === "active").length,
+      },
+      {
+        key: "review",
+        label: "Review",
+        count: experiments.filter((e) => e.status === "review").length,
+      },
+      {
+        key: "complete",
+        label: "Complete",
+        count: experiments.filter((e) => e.status === "complete").length,
+      },
+      {
+        key: "draft",
+        label: "Draft",
+        count: experiments.filter((e) => e.status === "draft").length,
+      },
+    ],
+    [experiments],
   );
+
+  const statusFilter: Record<TabKey, ExperimentStatus | null> = {
+    all: null,
+    active: "active",
+    review: "review",
+    complete: "complete",
+    draft: "draft",
+  };
+
+  const stats = useMemo(() => {
+    const activeCount = experiments.filter((e) => e.status === "active").length;
+    const reviewCount = experiments.filter((e) => e.status === "review").length;
+    const completedSteps = Object.values(experimentDetails).reduce(
+      (total, detail) => total + detail.protocol.filter((step) => step.status === "done").length,
+      0,
+    );
+    const collaborators = new Set(experiments.map((e) => e.owner)).size;
+    const aiInsights = Object.values(experimentDetails).reduce((total, detail) => total + detail.aiInsights.length, 0);
+
+    return [
+      { label: "Active", value: String(activeCount), note: `${reviewCount} in review`, noteColor: "positive" },
+      { label: "Protocol Steps", value: String(completedSteps), note: "Completed in Firestore", noteColor: "neutral" },
+      { label: "Collaborators", value: String(collaborators), note: "Across projects", noteColor: "neutral" },
+      { label: "AI Insights", value: String(aiInsights), note: "Available now", noteColor: "accent" },
+    ];
+  }, [experimentDetails, experiments]);
+
+  const attentionItems = useMemo<AttentionItem[]>(() => {
+    if (!activeMember?.uid) return [];
+    const now = new Date();
+    const details = Object.values(experimentDetails);
+    const reviewAssignments = details
+      .filter((detail) => detail.reviewStatus === "requested" && detail.reviewAssignedToUid === activeMember.uid)
+      .map((detail) => ({
+        id: `review-${detail.id}`,
+        title: "Independent review is waiting",
+        body: `${detail.name} was assigned to you for review${detail.reviewDueDate ? ` by ${detail.reviewDueDate}` : ""}.`,
+        action: "Review record",
+        experimentId: detail.id,
+        tone: "urgent" as const,
+      }));
+    const rejectedRecords = details
+      .filter((detail) => detail.reviewStatus === "rejected" && detail.ownerUid === activeMember.uid && !detail.locked)
+      .map((detail) => ({
+        id: `rework-${detail.id}`,
+        title: "Changes were requested",
+        body: `${detail.name} is back in your workspace with reviewer feedback to address.`,
+        action: "Resolve changes",
+        experimentId: detail.id,
+        tone: "urgent" as const,
+      }));
+    const dueRecords = details
+      .filter((detail) => {
+        if (detail.ownerUid !== activeMember.uid || detail.locked || !detail.dueDate) return false;
+        const dueAt = new Date(`${detail.dueDate}T23:59:59`);
+        return !Number.isNaN(dueAt.getTime()) && dueAt <= now;
+      })
+      .map((detail) => ({
+        id: `due-${detail.id}`,
+        title: "Experiment due for attention",
+        body: `${detail.name} was due ${detail.dueDate}. Review its readiness and next step.`,
+        action: "Open experiment",
+        experimentId: detail.id,
+        tone: "normal" as const,
+      }));
+
+    return [...reviewAssignments, ...rejectedRecords, ...dueRecords].slice(0, 3);
+  }, [activeMember?.uid, experimentDetails]);
+
+  const filtered = experiments.filter((e) => {
+    const normalizedQuery = query.toLowerCase();
+    const matchesTab = statusFilter[tab] === null || e.status === statusFilter[tab];
+    const matchesQuery =
+      e.name.toLowerCase().includes(normalizedQuery) ||
+      e.id.toLowerCase().includes(normalizedQuery) ||
+      e.project.toLowerCase().includes(normalizedQuery) ||
+      e.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery));
+    return matchesTab && matchesQuery;
+  });
 
   const updateCreateField = (field: keyof typeof newExperiment, value: string) => {
     setNewExperiment((prev) => ({ ...prev, [field]: value }));
@@ -115,67 +190,153 @@ export function Dashboard() {
     }
   };
 
+  const latestExperiment = experiments[0];
   const canCreateExperiment = !!activeMember && activeMember.status === "active" && activeMember.role !== "viewer" && activeMember.role !== "external";
 
   return (
-    <div className="xb-root">
-      <div className="xb-header">
-        <h1>Experiments</h1>
-        <div className="xb-header-actions">
-          <div className="xb-search">
-            <SearchIcon color="#6b7280" />
-            <input placeholder="Search..." value={query} onChange={(e) => setQuery(e.target.value)} />
+    <>
+      <div className="topbar">
+        <h1>My Experiments</h1>
+        <div className="topbar-actions">
+          <div className="search-box">
+            <SearchIcon />
+            <input
+              placeholder="Search experiments..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
-          <button className="xb-btn-primary" disabled={!canCreateExperiment} onClick={() => canCreateExperiment && setIsCreateOpen(true)}>
-            + New
+          <button className="btn-primary" disabled={!canCreateExperiment} onClick={() => canCreateExperiment && setIsCreateOpen(true)}>
+            + New Experiment
           </button>
         </div>
       </div>
 
-      {labDataError && <div className="xb-error">{labDataError}</div>}
+      <div className="dashboard-content">
+        {labDataError && <div className="modal-error">{labDataError}</div>}
 
-      <div className="xb-columns">
-        {columns.map((col) => (
-          <div className="xb-column" key={col.key}>
-            <div className="xb-column-head">
-              <span className="xb-dot" style={{ background: col.dot }} />
-              {col.label} · {col.cards.length}
+        <div className="stats-grid">
+          {stats.map((s) => (
+            <div key={s.label} className={`stat-card${s.noteColor === "accent" ? " accent" : ""}`}>
+              <div className="stat-card-label">{s.label}</div>
+              <div className="stat-card-value">{s.value}</div>
+              <div className={`stat-card-note${s.noteColor === "positive" ? " positive" : ""}`}>{s.note}</div>
             </div>
-            {col.cards.length === 0 && <div className="xb-column-empty">No experiments</div>}
-            {col.cards.map((card) => (
-              <button type="button" className="xb-card" key={card.id} onClick={() => navigate(`/experiments/${card.id}`)}>
-                <div className="xb-card-name">{card.name}</div>
-                <div className="xb-card-id">{card.id}</div>
-                {card.hasProgress && (
-                  <div className="xb-progress-track">
-                    <div className="xb-progress-fill" style={{ width: `${card.progressPct}%` }} />
-                  </div>
-                )}
-                <div className="xb-card-meta">
-                  {card.owner} · {card.modified}
-                </div>
-              </button>
-            ))}
+          ))}
+        </div>
+
+        <section className="attention-queue" aria-labelledby="attention-queue-title">
+          <div className="attention-queue-heading">
+            <div>
+              <span>WORK QUEUE</span>
+              <h2 id="attention-queue-title">What needs your attention</h2>
+            </div>
+            {attentionItems.length > 0 && <span className="attention-count">{attentionItems.length}</span>}
           </div>
-        ))}
+          {attentionItems.length > 0 ? (
+            <div className="attention-list">
+              {attentionItems.map((item) => (
+                <button key={item.id} className={`attention-item ${item.tone}`} onClick={() => navigate(`/experiments/${item.experimentId}`)}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <span>{item.body}</span>
+                  </div>
+                  <span className="attention-action">{item.action} →</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="attention-empty">No assigned reviews, requested changes, or overdue experiments right now.</p>
+          )}
+        </section>
+
+        <div className="filter-tabs">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              className={`filter-tab${tab === t.key ? " active" : ""}`}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label} ({t.count})
+            </button>
+          ))}
+        </div>
+
+        <div className="experiments-table-wrap">
+          <table className="experiments-table">
+            <thead>
+              <tr>
+                <th>Experiment</th>
+                <th>Project</th>
+                <th>Status</th>
+                <th>Modified</th>
+                <th>Owner</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="empty-row">
+                    No experiments match your search.
+                  </td>
+                </tr>
+              )}
+              {filtered.map((exp) => (
+                <tr key={exp.id} onClick={() => navigate(`/experiments/${exp.id}`)}>
+                  <td>
+                    <div className="exp-name">{exp.name}</div>
+                    <div className="exp-id">{exp.id}</div>
+                  </td>
+                  <td className="exp-project">{exp.project}</td>
+                  <td>
+                    <StatusBadge status={exp.status} />
+                  </td>
+                  <td className="exp-modified">{exp.modified}</td>
+                  <td className="exp-owner">{exp.owner}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="ai-banner">
+          <div className="ai-banner-icon">
+            <AlertIcon />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="ai-banner-title">Deterministic readiness checks are enabled</div>
+            <div className="ai-banner-body">
+              {latestExperiment
+                ? `Open ${latestExperiment.id} to review protocol completion, notes, and attachments.`
+                : "Create an experiment to generate deterministic AI readiness suggestions."}
+            </div>
+          </div>
+          <button
+            className="ai-banner-action"
+            disabled={!latestExperiment}
+            onClick={() => latestExperiment && navigate(`/experiments/${latestExperiment.id}`)}
+          >
+            View Analysis -&gt;
+          </button>
+        </div>
       </div>
 
       {isCreateOpen && (
-        <div className="xb-modal-backdrop" onMouseDown={closeCreateModal}>
-          <form className="xb-modal" onSubmit={submitNewExperiment} onMouseDown={(e) => e.stopPropagation()}>
-            <div className="xb-modal-header">
+        <div className="modal-backdrop" onMouseDown={closeCreateModal}>
+          <form className="experiment-modal" onSubmit={submitNewExperiment} onMouseDown={(e) => e.stopPropagation()}>
+            <div className="experiment-modal-header">
               <div>
                 <h2>New Experiment</h2>
                 <p>Create a draft record with a protocol checklist and audit trail.</p>
               </div>
-              <button type="button" className="xb-modal-close" onClick={closeCreateModal}>
+              <button type="button" className="modal-close" onClick={closeCreateModal}>
                 x
               </button>
             </div>
 
-            {createError && <div className="xb-modal-error">{createError}</div>}
+            {createError && <div className="modal-error">{createError}</div>}
 
-            <label className="xb-field">
+            <label className="modal-field">
               <span>Title</span>
               <input
                 value={newExperiment.name}
@@ -185,7 +346,7 @@ export function Dashboard() {
               />
             </label>
 
-            <label className="xb-field">
+            <label className="modal-field">
               <span>Project</span>
               <input
                 value={newExperiment.project}
@@ -195,7 +356,7 @@ export function Dashboard() {
               />
             </label>
 
-            <label className="xb-field">
+            <label className="modal-field">
               <span>Project Record</span>
               <select value={newExperiment.projectId} onChange={(e) => updateCreateField("projectId", e.target.value)}>
                 <option value="">No linked project</option>
@@ -205,18 +366,18 @@ export function Dashboard() {
               </select>
             </label>
 
-            <div className="xb-field-grid">
-              <label className="xb-field">
+            <div className="workbench-form-grid">
+              <label className="modal-field">
                 <span>Notebook</span>
                 <input value={newExperiment.notebook} onChange={(e) => updateCreateField("notebook", e.target.value)} />
               </label>
-              <label className="xb-field">
+              <label className="modal-field">
                 <span>Due Date</span>
                 <input type="date" value={newExperiment.dueDate} onChange={(e) => updateCreateField("dueDate", e.target.value)} />
               </label>
             </div>
 
-            <label className="xb-field">
+            <label className="modal-field">
               <span>Objective</span>
               <textarea
                 value={newExperiment.objective}
@@ -226,7 +387,7 @@ export function Dashboard() {
               />
             </label>
 
-            <label className="xb-field">
+            <label className="modal-field">
               <span>Tags</span>
               <input
                 value={newExperiment.tags}
@@ -235,7 +396,7 @@ export function Dashboard() {
               />
             </label>
 
-            <label className="xb-field">
+            <label className="modal-field">
               <span>Protocol Template</span>
               <select
                 value={newExperiment.protocolTemplateId}
@@ -243,7 +404,7 @@ export function Dashboard() {
               >
                 <option value="">Default checklist</option>
                 {protocolTemplates
-                  .filter((template) => template.status === "active")
+                  .filter((template) => template.status === "active" && template.steps.some((step) => step.trim()))
                   .map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.name} v{template.version}
@@ -252,17 +413,17 @@ export function Dashboard() {
               </select>
             </label>
 
-            <div className="xb-modal-actions">
-              <button type="button" className="xb-btn-secondary" onClick={closeCreateModal}>
+            <div className="experiment-modal-actions">
+              <button type="button" className="btn-secondary" onClick={closeCreateModal}>
                 Cancel
               </button>
-              <button className="xb-btn-primary" type="submit" disabled={isCreatingExperiment}>
+              <button className="btn-primary" type="submit" disabled={isCreatingExperiment}>
                 {isCreatingExperiment ? "Creating..." : "Create Draft"}
               </button>
             </div>
           </form>
         </div>
       )}
-    </div>
+    </>
   );
 }

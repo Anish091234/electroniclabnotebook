@@ -1,25 +1,59 @@
-# CODING AGENTS: READ THIS FIRST
+# LabOS
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+LabOS is a React + TypeScript electronic lab notebook backed by Firebase Authentication, Firestore, Cloud Storage, Security Rules, and trusted Cloud Functions. The product is designed around lab-scoped records, independent review, immutable finalized attachments, and a fresh-authenticated author-signing workflow.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+## Start locally
 
-## What you should do — IMPORTANT
+Requirements: Node 22 (see [.nvmrc](.nvmrc)) and Java for the Firestore emulator test.
 
-**Read the chat transcripts first.** There are 1 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+```bash
+npm ci
+npm ci --prefix functions
+```
 
-**Read `project/Electronic Lab Notebook.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+Copy `.env.example` to `.env.local`, add Firebase web configuration for a non-production project, then run:
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+```bash
+npm run dev
+```
 
-## About the design files
+Run the production-relevant checks before changing rules or backend code:
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+```bash
+npm run lint
+npm run build
+npm run test:rules:types
+npm run test:rules
+npm run lint --prefix functions
+npm run build --prefix functions
+```
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+## Deploy safely
 
-## Bundle contents
+Use a separate staging Firebase project and pass the exact project ID explicitly. The repository's default Firebase alias is not an environment approval.
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `Electronic Lab Notebook Application` project files (HTML prototypes, assets, components)
+```bash
+npm run firebase:deploy-backend -- --project <project-id>
+```
+
+That deployment includes Cloud Functions, Firestore Rules, and Storage Rules. Deploy the frontend only after it and the staging smoke test succeed.
+
+Read these runbooks before accepting laboratory data:
+
+- [Firebase environment setup](FIREBASE_SETUP.md)
+- [Trusted backend and App Check rollout](FUNCTIONS_SETUP.md)
+- [Production operations checklist](OPERATIONS.md)
+
+## Production boundaries to understand
+
+- App Check must be enabled in stages. Enrolling a client site key is not the same as enforcing Functions, Firestore, and Storage.
+- Invite bearer tokens are issued in URL fragments and must be treated as secrets. Cancel and reissue older query-token links.
+- Review decisions and author signatures require a verified email and fresh authentication. A verified active lab member can use the signed Experiment Report to rebuild and compare the evidence manifest and finalized attachment metadata; this member-only check is not regulatory certification or external notarization.
+- An attachment cannot be read until trusted finalization writes matching metadata. Unfinalized uploads can still consume storage; the current implementation has no automatic orphan cleanup worker.
+- New `external` invitations and role assignments are disabled until scoped sharing exists. Legacy external members have no lab-wide access; an owner must promote them to a supported role or use a separate lab.
+- There are no public/external project share links. Browser-generated project share tokens are rejected by Firestore Rules; a future share capability needs a trusted, scoped, expiring backend design.
+- Signing currently reads the whole inventory collection to validate reagent lots, and the Functions dependency tree has a tracked moderate upstream vulnerability chain. Both have documented production gates in [OPERATIONS.md](OPERATIONS.md).
+
+## Design handoff materials
+
+The original design-export references remain in [`chats/`](chats/) and [`project/`](project/). They are design source material; the running application and its production behavior live in `src/`, `functions/`, `firestore.rules`, and `storage.rules`.

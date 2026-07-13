@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExperimentReport.css";
-import type { AuthoringBlock } from "../data/types";
+import { SecureAttachmentImage } from "../components/SecureAttachment";
+import type { AttachmentRecord, AuthoringBlock, ExperimentIntegrityReport } from "../data/types";
 import { useLabData } from "../contexts/LabDataContext";
 import { parseChecklist, parseDelimitedRows, parseKeyValueRows } from "../lib/authoringBlocks";
 
-function renderReportBlock(block: AuthoringBlock) {
+function renderReportBlock(block: AuthoringBlock, attachmentsById: Map<string, AttachmentRecord>) {
   if (block.kind === "table") {
     const rows = parseDelimitedRows(block.content);
     const [header, ...body] = rows;
@@ -49,8 +51,7 @@ function renderReportBlock(block: AuthoringBlock) {
   }
 
   if (block.kind === "image") {
-    const imageUrl = block.imageUrl || block.content;
-    return imageUrl ? <img className="report-block-image" src={imageUrl} alt={block.title} /> : <p>No image URL attached.</p>;
+    return <SecureAttachmentImage className="report-block-image" attachment={block.attachmentId ? attachmentsById.get(block.attachmentId) : undefined} alt={block.title} />;
   }
 
   if (block.kind === "equation") {
@@ -63,8 +64,25 @@ function renderReportBlock(block: AuthoringBlock) {
 export function ExperimentReport() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { experimentDetails, attachments, auditEvents, inventoryItems } = useLabData();
+  const { experimentDetails, attachments, auditEvents, inventoryItems, verifyExperimentIntegrity } = useLabData();
   const detail = id ? experimentDetails[id] : undefined;
+  const [integrityReport, setIntegrityReport] = useState<ExperimentIntegrityReport | null>(null);
+  const [integrityError, setIntegrityError] = useState("");
+  const [isVerifyingIntegrity, setIsVerifyingIntegrity] = useState(false);
+
+  const handleIntegrityVerification = async () => {
+    if (!detail) return;
+    setIsVerifyingIntegrity(true);
+    setIntegrityError("");
+    try {
+      setIntegrityReport(await verifyExperimentIntegrity(detail.id));
+    } catch (error) {
+      setIntegrityReport(null);
+      setIntegrityError(error instanceof Error ? error.message : "Could not verify this signed record.");
+    } finally {
+      setIsVerifyingIntegrity(false);
+    }
+  };
 
   if (!detail) {
     return (
@@ -76,6 +94,7 @@ export function ExperimentReport() {
   }
 
   const files = attachments.filter((item) => item.experimentId === detail.id);
+  const attachmentsById = new Map(files.map((attachment) => [attachment.id, attachment]));
   const events = auditEvents.filter((event) => event.targetId === detail.id).slice(0, 20);
   const lotLabels = new Map(
     inventoryItems.flatMap((item) =>
@@ -126,7 +145,7 @@ export function ExperimentReport() {
           {detail.authoringBlocks.map((block) => (
             <div key={block.id} className="report-block">
               <strong>{block.title} ({block.kind}{block.required ? ", required" : ""})</strong>
-              {renderReportBlock(block)}
+              {renderReportBlock(block, attachmentsById)}
             </div>
           ))}
         </section>
@@ -169,10 +188,52 @@ export function ExperimentReport() {
           <p>Assigned reviewer: {detail.reviewAssignedToName || "Unassigned"}</p>
           <p>Review due date: {detail.reviewDueDate || "No due date"}</p>
           {detail.reviewComment && <p>Review note: {detail.reviewComment}</p>}
+          {(detail.reviewEvents?.length ?? 0) > 0 && (
+            <div className="report-review-history">
+              <h3>Immutable review history</h3>
+              {[...(detail.reviewEvents ?? [])].map((event) => (
+                <p key={event.id}>
+                  <strong>{event.actorName}</strong> {event.kind === "requested" ? `requested review from ${event.reviewerName}` : event.kind === "approved" ? "approved review" : "requested changes"} on {new Date(event.occurredAt).toLocaleString()}.
+                  {event.comment ? ` ${event.comment}` : ""}
+                </p>
+              ))}
+            </div>
+          )}
           {detail.signatures.length === 0 && <p>No electronic signatures.</p>}
           {detail.signatures.map((signature) => (
-            <p key={signature.id}><strong>{signature.signerName}</strong> signed as {signature.meaning} on {new Date(signature.signedAt).toLocaleString()}. {signature.comment}</p>
+            <p key={signature.id}>
+              <strong>{signature.signerName}</strong> signed as {signature.meaning} on {new Date(signature.signedAt).toLocaleString()}. {signature.comment}
+              {signature.manifestSha256 && <> Evidence manifest SHA-256: <code>{signature.manifestSha256}</code>.</>}
+            </p>
           ))}
+          {detail.locked && (
+            <div className={`report-integrity ${integrityReport ? (integrityReport.verified ? "verified" : "failed") : ""}`}>
+              <div>
+                <h3>Record integrity verification</h3>
+                <p>Rebuild the signed evidence manifest and validate the finalized attachment metadata against immutable Cloud Storage objects.</p>
+              </div>
+              <button type="button" className="report-verify" onClick={() => void handleIntegrityVerification()} disabled={isVerifyingIntegrity}>
+                {isVerifyingIntegrity ? "Verifying…" : "Verify signed record"}
+              </button>
+              <div aria-live="polite">
+                {integrityError && <p className="report-integrity-error">{integrityError}</p>}
+                {integrityReport && (
+                  integrityReport.verified ? (
+                    <p className="report-integrity-success">
+                      Verified: the signed manifest matches the current record and {integrityReport.attachmentCount} finalized attachment{integrityReport.attachmentCount === 1 ? "" : "s"}.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="report-integrity-error">Verification found an integrity mismatch. Do not rely on this record until it is investigated.</p>
+                      <ul>
+                        {integrityReport.failures.map((failure) => <li key={failure}>{failure}</li>)}
+                      </ul>
+                    </>
+                  )
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         <section>

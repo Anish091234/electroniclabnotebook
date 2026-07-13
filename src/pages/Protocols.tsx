@@ -18,9 +18,12 @@ export function Protocols() {
   const { protocolTemplates, saveProtocolTemplate, deleteProtocolTemplate } = useLabData();
   const { activeMember } = useAuth();
   const [form, setForm] = useState(EMPTY_FORM);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const canManageProtocols = activeMember?.role === "owner" || activeMember?.role === "admin" || activeMember?.role === "pi";
 
   const edit = (template: ProtocolTemplate) => {
+    setFormError(null);
     setForm({
       id: template.id,
       name: template.name,
@@ -33,15 +36,29 @@ export function Protocols() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    await saveProtocolTemplate({
-      id: form.id || undefined,
-      name: form.name,
-      description: form.description,
-      version: form.version,
-      status: form.status,
-      steps: form.steps.split("\n"),
-    });
-    setForm(EMPTY_FORM);
+    if (isSaving) return;
+    if (!form.steps.split("\n").some((step) => step.trim())) {
+      setFormError("Add at least one non-empty protocol step before saving.");
+      return;
+    }
+
+    setFormError(null);
+    setIsSaving(true);
+    try {
+      await saveProtocolTemplate({
+        id: form.id || undefined,
+        name: form.name,
+        description: form.description,
+        version: form.version,
+        status: form.status,
+        steps: form.steps.split("\n"),
+      });
+      setForm(EMPTY_FORM);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Unable to save this protocol template.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -53,6 +70,7 @@ export function Protocols() {
         {canManageProtocols ? (
           <form className="protocol-editor-card" onSubmit={submit}>
             <h2>{form.id ? "Edit Protocol Template" : "New Protocol Template"}</h2>
+            {formError && <div className="modal-error" role="alert">{formError}</div>}
             <label className="modal-field">
               <span>Name</span>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -80,8 +98,8 @@ export function Protocols() {
               <textarea value={form.steps} onChange={(e) => setForm({ ...form, steps: e.target.value })} rows={8} required />
             </label>
             <div className="experiment-modal-actions">
-              <button type="button" className="btn-secondary" onClick={() => setForm(EMPTY_FORM)}>Reset</button>
-              <button className="btn-primary" type="submit">Save Template</button>
+              <button type="button" className="btn-secondary" disabled={isSaving} onClick={() => { setForm(EMPTY_FORM); setFormError(null); }}>Reset</button>
+              <button className="btn-primary" type="submit" disabled={isSaving}>{isSaving ? "Saving..." : "Save Template"}</button>
             </div>
           </form>
         ) : (

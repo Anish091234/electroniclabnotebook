@@ -20,6 +20,18 @@ function shortId(value?: string) {
   return value.length > 18 ? `${value.slice(0, 10)}...${value.slice(-4)}` : value;
 }
 
+function isSensitiveChange(field: string, before: string, after: string) {
+  return /(token|secret|password|email|download.*url|share.*url|invite.*url|api.?key)/i.test(field)
+    || /(?:https?:\/\/|token=)/i.test(before)
+    || /(?:https?:\/\/|token=)/i.test(after);
+}
+
+function auditChangeText(change: { field: string; before: string; after: string }) {
+  return isSensitiveChange(change.field, change.before, change.after)
+    ? `${change.field} Redacted`
+    : `${change.field} ${change.before} ${change.after}`;
+}
+
 export function AuditLog() {
   const { auditEvents } = useLabData();
   const [filter, setFilter] = useState<AuditFilter>("all");
@@ -39,7 +51,7 @@ export function AuditLog() {
     const normalizedQuery = query.toLowerCase();
     const matchesFilter = filter === "all" || event.kind === filter;
     const changeText = (event.fieldChanges ?? [])
-      .map((change) => `${change.field} ${change.before} ${change.after}`)
+      .map(auditChangeText)
       .join(" ")
       .toLowerCase();
     const matchesQuery =
@@ -114,15 +126,15 @@ export function AuditLog() {
                     {event.fieldChanges?.map((change, index) => (
                       <div key={`${event.id}-${change.field}-${index}`} className="audit-change-row">
                         <strong>{change.field}</strong>
-                        <span>{change.before}</span>
-                        <span>{change.after}</span>
+                        <span>{isSensitiveChange(change.field, change.before, change.after) ? "Redacted" : change.before}</span>
+                        <span>{isSensitiveChange(change.field, change.before, change.after) ? "Redacted" : change.after}</span>
                       </div>
                     ))}
                   </div>
                 )}
                 <div className="audit-event-meta">
                   <span>User: {event.actor}</span>
-                  <span>UID: {shortId(event.actorUid)}</span>
+                  <span>UID: {shortId(event.actorUid ?? undefined)}</span>
                   <span>Device: {event.deviceLabel ?? "Unknown device"}</span>
                   <span>Device ID: {shortId(event.deviceId)}</span>
                   {event.versionNumber ? <span>Revision: {event.versionNumber}</span> : null}

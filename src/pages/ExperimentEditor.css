@@ -892,6 +892,7 @@
 }
 
 .attachment-row {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -899,6 +900,13 @@
   border: 1px solid var(--color-border-lighter);
   border-radius: 7px;
   background: var(--color-bg-subtle);
+  text-align: left;
+  cursor: pointer;
+}
+
+.attachment-row:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .attachment-row span {
@@ -925,6 +933,17 @@
   margin: 0;
   font: 400 11.5px/1.5 system-ui, sans-serif;
   color: var(--color-text-muted);
+}
+
+.secure-attachment-download {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.secure-attachment-error {
+  color: var(--color-danger-text);
+  font: 400 10.5px system-ui, sans-serif;
 }
 
 .authoring-template-row {
@@ -1078,6 +1097,7 @@
 .authoring-builder select,
 .authoring-builder input,
 .authoring-builder textarea,
+.review-panel select,
 .review-panel input,
 .review-panel textarea {
   border: 1px solid var(--color-border-strong);
@@ -1086,6 +1106,19 @@
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font: 400 12px/1.5 system-ui, sans-serif;
+}
+
+.review-control-label {
+  display: grid;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font: 700 10px system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.review-control-label select {
+  width: 100%;
 }
 
 .authoring-required-toggle {
@@ -1133,6 +1166,15 @@
 .signing-blocker-box span {
   font: 500 11px/1.35 system-ui, sans-serif;
   color: var(--color-text-secondary);
+}
+
+.signature-error {
+  border: 1px solid var(--color-warning-border);
+  background: var(--color-warning-bg);
+  border-radius: 6px;
+  padding: 8px 9px;
+  color: var(--color-warning-text);
+  font: 600 11px/1.4 system-ui, sans-serif;
 }
 
 @media (max-width: 980px) {

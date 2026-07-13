@@ -69,6 +69,110 @@
   gap: 12px;
 }
 
+.attention-queue {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-surface);
+  overflow: hidden;
+}
+
+.attention-queue-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border-lighter);
+}
+
+.attention-queue-heading span:first-child {
+  display: block;
+  color: var(--color-text-faint);
+  font: 700 9.5px system-ui, sans-serif;
+  letter-spacing: 0.65px;
+}
+
+.attention-queue-heading h2 {
+  margin: 3px 0 0;
+  color: var(--color-text-primary);
+  font: 700 14px system-ui, sans-serif;
+}
+
+.attention-count {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font: 800 11px system-ui, sans-serif;
+}
+
+.attention-list {
+  display: grid;
+}
+
+.attention-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border-lighter);
+  padding: 11px 14px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.attention-item:last-child {
+  border-bottom: 0;
+}
+
+.attention-item:hover {
+  background: var(--color-bg-subtle);
+}
+
+.attention-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.attention-item > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.attention-item strong {
+  color: var(--color-text-primary);
+  font: 700 12px system-ui, sans-serif;
+}
+
+.attention-item > div > span,
+.attention-empty {
+  color: var(--color-text-muted);
+  font: 400 11.5px/1.45 system-ui, sans-serif;
+}
+
+.attention-item.urgent strong {
+  color: var(--color-warning-text);
+}
+
+.attention-action {
+  flex-shrink: 0;
+  color: var(--color-primary);
+  font: 700 11px system-ui, sans-serif;
+}
+
+.attention-empty {
+  margin: 0;
+  padding: 14px;
+}
+
 .stat-card {
   background: var(--color-bg-surface);
   border-radius: 7px;
@@ -388,6 +492,12 @@
 
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .attention-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
   }
 
   .experiments-table-wrap {

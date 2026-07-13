@@ -88,5 +88,11 @@ export function parseKeyValueRows(content: string) {
 }
 
 export function blockSearchText(block: AuthoringBlock) {
-  return [block.kind, block.title, block.content, block.fileName ?? "", block.imageUrl ?? ""].join(" ");
+  // Image blocks may reference a storage-backed attachment. Never index a
+  // legacy URL from Firestore: download URLs are bearer capabilities, not
+  // notebook text or search data.
+  if (block.kind === "image") {
+    return [block.kind, block.title, block.fileName ?? "", block.attachmentId ?? ""].join(" ");
+  }
+  return [block.kind, block.title, block.content, block.fileName ?? ""].join(" ");
 }

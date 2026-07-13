@@ -2,15 +2,23 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import {
   GoogleAuthProvider,
   OAuthProvider,
+  EmailAuthProvider,
+  browserLocalPersistence,
+  browserSessionPersistence,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendEmailVerification,
   sendPasswordResetEmail,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  setPersistence,
   type User,
 } from "firebase/auth";
-import { auth, isFirebaseConfigured } from "../lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+import { auth, db, isFirebaseConfigured } from "../lib/firebase";
 import type { Lab, LabMember, UserProfile } from "../data/accountTypes";
 import { acceptLabInvite, ensureUserProfileAndLab } from "../services/accountService";
 import { clearPendingInvite, getPendingInvite } from "../lib/pendingInvite";
@@ -35,11 +43,13 @@ interface AuthContextValue {
   isLoading: boolean;
   authError: string | null;
   clearAuthError: () => void;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   createAccount: (email: string, password: string) => Promise<void>;
+  resendVerification: (email: string, password: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
-  loginWithApple: () => Promise<void>;
+  loginWithGoogle: (rememberMe?: boolean) => Promise<void>;
+  loginWithApple: (rememberMe?: boolean) => Promise<void>;
+  reauthenticateForSignature: (password?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -73,9 +83,13 @@ function getAuthInstance() {
 }
 
 async function loadAccount(firebaseUser: User) {
+  if (!firebaseUser.emailVerified) {
+    throw new Error("email-verification-required");
+  }
+
   const invite = getPendingInvite();
   if (invite) {
-    const account = await acceptLabInvite(firebaseUser, invite);
+    const account = await acceptLabInvite(invite);
     clearPendingInvite();
     return account;
   }
@@ -85,11 +99,17 @@ async function loadAccount(firebaseUser: User) {
 
 function friendlyAuthError(err: unknown) {
   const message = err instanceof Error ? err.message : "Unable to load account.";
-  if (message.includes("invalid or has already been used")) {
-    return "This invite link is invalid, has already been accepted, or was opened with the wrong email address.";
+  if (message.includes("email-verification-required") || message.includes("Verify the invited email address")) {
+    return "Verify your email address before accessing LabOS. Check your inbox, then sign in again.";
+  }
+  if (message.includes("expired, was canceled, or has already been used") || message.includes("invite is invalid")) {
+    return "This invite link is invalid, expired, canceled, or has already been accepted. Ask the lab owner to issue a new invite.";
   }
   if (message.includes("Invite link was not found")) {
     return "This invite link was not found. Ask the lab owner to send a new invite.";
+  }
+  if (message.includes("different email address")) {
+    return "This invite was issued to a different email address. Sign in with the invited address or ask the lab owner to reissue it.";
   }
   if (message.includes("Missing or insufficient permissions") || message.includes("permission-denied")) {
     return "Firebase blocked this invite request. Deploy the latest Firestore rules, then try again.";
@@ -119,8 +139,23 @@ function friendlyCredentialError(err: unknown) {
   return err;
 }
 
+function isVerificationRequiredError(err: unknown) {
+  return err instanceof Error && err.message.includes("email-verification-required");
+}
+
 function publicAppUrl() {
   return (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim().replace(/\/+$/, "") || window.location.origin;
+}
+
+async function setSessionPersistence(rememberMe: boolean) {
+  await setPersistence(getAuthInstance(), rememberMe ? browserLocalPersistence : browserSessionPersistence);
+}
+
+function verificationContinueUrl() {
+  // Verification emails must not become a second carrier for an invite token.
+  // The original invite stays only in the recipient's current browser session
+  // (or can be reopened from the original invitation message).
+  return `${publicAppUrl()}/login`;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -130,6 +165,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeMember, setActiveMember] = useState<LabMember | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const firebaseUserUid = firebaseUser?.uid ?? null;
+  const profileUid = profile?.uid ?? null;
+  const activeLabId = activeLab?.id ?? null;
 
   useEffect(() => {
     if (!auth) {
@@ -160,14 +198,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setActiveLab(null);
         setActiveMember(null);
         setAuthError(friendlyAuthError(err));
-        await signOut(getAuthInstance());
+        // Account creation and resend verification need a brief authenticated
+        // session to send the email. The initiating action signs out after the
+        // send completes; an unverified account never receives a LabOS profile
+        // or membership while this observer is waiting.
+        if (!isVerificationRequiredError(err)) {
+          await signOut(getAuthInstance());
+        }
       } finally {
         setIsLoading(false);
       }
     });
   }, []);
 
-  const login = async (email: string, password: string) => {
+  // Membership is authorization state, not just profile data. Keep the
+  // current member document live so a trusted ownership transfer (or an
+  // access-status change) takes effect in the interface without a reload.
+  useEffect(() => {
+    if (!firebaseUserUid || !profileUid || profileUid !== firebaseUserUid || !activeLabId || !db) {
+      return undefined;
+    }
+
+    const revokeLabAccess = (message: string) => {
+      setActiveMember(null);
+      setAuthError(message);
+      // `onAuthStateChanged` clears the remaining account state. Keep the
+      // access-revoked message so the login screen can explain the redirect.
+      void signOut(getAuthInstance()).catch(() => {
+        setAuthError(message);
+      });
+    };
+
+    return onSnapshot(
+      doc(db, "labs", activeLabId, "members", firebaseUserUid),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          revokeLabAccess("Your membership in the active lab is no longer available.");
+          return;
+        }
+
+        const member = snapshot.data() as LabMember;
+        if (member.uid !== firebaseUserUid || member.status !== "active") {
+          revokeLabAccess("Your access to the active lab has been revoked. Contact the lab owner if you believe this is an error.");
+          return;
+        }
+        setActiveMember(member);
+      },
+      (error) => {
+        // Once a membership is disabled or removed, Firestore rules no longer
+        // permit the member document to be read. Treat that terminal error as
+        // access revocation rather than leaving a stale authenticated shell.
+        if (error.code === "permission-denied") {
+          revokeLabAccess("Your access to the active lab has been revoked. Contact the lab owner if you believe this is an error.");
+          return;
+        }
+        setAuthError((current) => current ?? "Unable to refresh your lab membership. Reload LabOS and contact the lab owner if this continues.");
+      },
+    );
+  }, [activeLabId, firebaseUserUid, profileUid]);
+
+  const login = async (email: string, password: string, rememberMe = false) => {
     const firebaseAuth = getAuthInstance();
     const normalizedEmail = email.trim();
 
@@ -176,7 +266,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+      await setSessionPersistence(rememberMe);
+      const credential = await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+      if (!credential.user.emailVerified) {
+        await signOut(firebaseAuth);
+        throw new Error("email-verification-required");
+      }
     } catch (err) {
       throw friendlyCredentialError(err);
     }
@@ -191,9 +286,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      await createUserWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+      await setSessionPersistence(false);
+      const credential = await createUserWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+      await sendEmailVerification(credential.user, { url: verificationContinueUrl() });
     } catch (err) {
       throw friendlyCredentialError(err);
+    } finally {
+      if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
+        await signOut(firebaseAuth);
+      }
+    }
+  };
+
+  const resendVerification = async (email: string, password: string) => {
+    const firebaseAuth = getAuthInstance();
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail || !password) {
+      throw new Error("Enter your email and password to resend the verification email.");
+    }
+
+    try {
+      await setSessionPersistence(false);
+      const credential = await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+      if (credential.user.emailVerified) {
+        await signOut(firebaseAuth);
+        throw new Error("This email address is already verified. Sign in normally to continue.");
+      }
+      await sendEmailVerification(credential.user, { url: verificationContinueUrl() });
+    } catch (err) {
+      throw friendlyCredentialError(err);
+    } finally {
+      if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
+        await signOut(firebaseAuth);
+      }
     }
   };
 
@@ -214,17 +340,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (rememberMe = false) => {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
-    await signInWithPopup(getAuthInstance(), provider);
+    await setSessionPersistence(rememberMe);
+    const firebaseAuth = getAuthInstance();
+    const credential = await signInWithPopup(firebaseAuth, provider);
+    if (!credential.user.emailVerified) {
+      await signOut(firebaseAuth);
+      throw new Error("email-verification-required");
+    }
   };
 
-  const loginWithApple = async () => {
+  const loginWithApple = async (rememberMe = false) => {
     const provider = new OAuthProvider("apple.com");
     provider.addScope("email");
     provider.addScope("name");
-    await signInWithPopup(getAuthInstance(), provider);
+    await setSessionPersistence(rememberMe);
+    const firebaseAuth = getAuthInstance();
+    const credential = await signInWithPopup(firebaseAuth, provider);
+    if (!credential.user.emailVerified) {
+      await signOut(firebaseAuth);
+      throw new Error("email-verification-required");
+    }
+  };
+
+  const reauthenticateForSignature = async (password?: string) => {
+    const firebaseAuth = getAuthInstance();
+    const currentUser = firebaseAuth.currentUser;
+    if (!currentUser) throw new Error("Sign in again before creating an electronic signature.");
+
+    const providerIds = currentUser.providerData.map((provider) => provider.providerId);
+    if (providerIds.includes("password")) {
+      if (!currentUser.email || !password) {
+        throw new Error("Enter your account password to confirm this electronic signature.");
+      }
+      await reauthenticateWithCredential(currentUser, EmailAuthProvider.credential(currentUser.email, password));
+    } else if (providerIds.includes("google.com")) {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      await reauthenticateWithPopup(currentUser, provider);
+    } else if (providerIds.includes("apple.com")) {
+      const provider = new OAuthProvider("apple.com");
+      await reauthenticateWithPopup(currentUser, provider);
+    } else {
+      throw new Error("This sign-in method cannot confirm an electronic signature yet. Sign out, then sign in again before signing.");
+    }
+
+    await currentUser.getIdToken(true);
   };
 
   const logout = async () => {
@@ -232,6 +395,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const user = profile ? toAuthUser(profile, activeMember) : null;
+  const isAuthenticated = !!user && activeMember?.status === "active";
 
   const value = useMemo(
     () => ({
@@ -240,19 +404,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       activeLab,
       activeMember,
-      isAuthenticated: !!user,
+      isAuthenticated,
       isConfigured: isFirebaseConfigured,
       isLoading,
       authError,
       clearAuthError: () => setAuthError(null),
       login,
       createAccount,
+      resendVerification,
       resetPassword,
       loginWithGoogle,
       loginWithApple,
+      reauthenticateForSignature,
       logout,
     }),
-    [activeLab, activeMember, authError, firebaseUser, isLoading, profile, user],
+    [activeLab, activeMember, authError, firebaseUser, isAuthenticated, isLoading, profile, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

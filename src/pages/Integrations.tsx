@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { getBlob, ref } from "firebase/storage";
 import "./Dashboard.css";
 import "./CompetitivePages.css";
 import { useLabData } from "../contexts/LabDataContext";
 import type { InventoryLot } from "../data/types";
+import { storage } from "../lib/firebase";
 import { parseCsv, rowsToCsv, valueFor, type ParsedCsv } from "../lib/csv";
 import { createZip } from "../lib/zip";
 
@@ -75,18 +77,32 @@ export function Integrations() {
         item.lots.map((lot) => [item.name, item.category, item.vendor, item.catalogNumber, lot.lotNumber, lot.location, lot.quantity, lot.unit, lot.expirationDate, lot.status]),
       ),
     ];
-    const attachmentManifest = [];
+    const attachmentManifest: Record<string, unknown>[] = [];
     const attachmentEntries: { path: string; data: Blob }[] = [];
 
     for (const attachment of attachments) {
+      const manifestEntry = {
+        id: attachment.id,
+        experimentId: attachment.experimentId,
+        protocolStepId: attachment.protocolStepId ?? null,
+        fileName: attachment.fileName,
+        contentType: attachment.contentType,
+        size: attachment.size,
+        storagePath: attachment.storagePath,
+        generation: attachment.generation,
+        sha256: attachment.sha256,
+        state: attachment.state,
+        uploadedByUid: attachment.uploadedByUid ?? null,
+        uploadedAt: attachment.uploadedAt,
+      };
       try {
-        const response = await fetch(attachment.downloadURL);
-        const blob = await response.blob();
+        if (!storage || attachment.state !== "finalized") throw new Error("Attachment is not available through authenticated storage.");
+        const blob = await getBlob(ref(storage, attachment.storagePath));
         const path = `attachments/${attachment.experimentId}/${attachment.id}-${sanitizeFileName(attachment.fileName)}`;
         attachmentEntries.push({ path, data: blob });
-        attachmentManifest.push({ ...attachment, exportPath: path, exportStatus: "included" });
+        attachmentManifest.push({ ...manifestEntry, exportPath: path, exportStatus: "included" });
       } catch {
-        attachmentManifest.push({ ...attachment, exportStatus: "fetch_failed" });
+        attachmentManifest.push({ ...manifestEntry, exportStatus: "fetch_failed" });
       }
     }
 

@@ -202,6 +202,55 @@
   gap: 8px;
 }
 
+.ownership-transfer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ownership-transfer-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-warning-border);
+  border-radius: 8px;
+  padding: 12px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ownership-transfer-card.incoming {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-light);
+}
+
+.ownership-transfer-card h3 {
+  font: 700 12.5px system-ui, sans-serif;
+  color: var(--color-text-primary);
+  margin: 0 0 3px;
+}
+
+.ownership-transfer-card p {
+  font: 400 11.5px/1.45 system-ui, sans-serif;
+  color: var(--color-text-muted);
+  margin: 0;
+  max-width: 720px;
+}
+
+.ownership-transfer-actions,
+.team-member-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.team-transfer-btn {
+  padding: 5px 8px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
 .invite-card {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
@@ -461,6 +510,11 @@
   .invite-card {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .ownership-transfer-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .invite-role-pill,

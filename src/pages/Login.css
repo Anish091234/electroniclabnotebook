@@ -1,10 +1,28 @@
 .login-page {
   min-height: 100vh;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--color-bg-app);
   padding: 24px;
+}
+
+.login-home-link {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  border-radius: 6px;
+  padding: 0 8px;
+  color: var(--color-text-secondary);
+  font: 700 12px system-ui, sans-serif;
+}
+
+.login-home-link:hover {
+  color: var(--color-primary);
 }
 
 .login-card {
@@ -106,6 +124,17 @@
   border-color: var(--color-primary);
 }
 
+.login-home-link:focus-visible,
+.login-label-row button:focus-visible,
+.login-secondary-action:focus-visible,
+.social-login-btn:focus-visible,
+.login-mode-toggle button:focus-visible,
+.login-submit:focus-visible,
+.login-field input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 72%, white);
+  outline-offset: 2px;
+}
+
 .login-error {
   font: 400 12px system-ui, sans-serif;
   color: var(--color-danger-text);
@@ -121,6 +150,21 @@
   border: 1px solid var(--color-primary-border);
   border-radius: 6px;
   padding: 8px 10px;
+}
+
+.login-secondary-action {
+  border: 1px solid var(--color-primary-border);
+  border-radius: 6px;
+  background: var(--color-bg-surface);
+  color: var(--color-primary);
+  padding: 8px 10px;
+  font: 700 12px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.login-secondary-action:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .social-login-grid {
@@ -198,6 +242,10 @@
   color: var(--color-primary);
 }
 
+.login-mode-toggle button:disabled {
+  cursor: default;
+}
+
 .login-submit {
   background: var(--color-primary);
   color: white;
@@ -213,8 +261,64 @@
   cursor: default;
 }
 
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font: 500 11.5px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.login-remember input {
+  accent-color: var(--color-primary);
+}
+
+.login-remember input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 72%, white);
+  outline-offset: 2px;
+}
+
+.login-field-help,
+.login-field-error {
+  margin: 0;
+  font: 400 11px/1.4 system-ui, sans-serif;
+}
+
+.login-field-help {
+  color: var(--color-text-muted);
+}
+
+.login-field-error {
+  color: var(--color-danger-text);
+}
+
 .login-hint {
   text-align: center;
   font: 400 11.5px system-ui, sans-serif;
   color: var(--color-text-faint);
+}
+
+.login-shared-device {
+  margin: -10px 0 0;
+  text-align: center;
+  font: 400 10.5px/1.4 system-ui, sans-serif;
+  color: var(--color-text-faint);
+}
+
+@media (max-width: 520px) {
+  .login-page {
+    align-items: flex-start;
+    padding: 76px 16px 24px;
+  }
+
+  .login-home-link {
+    top: 14px;
+    left: 16px;
+  }
+
+  .login-card {
+    max-width: 100%;
+    padding: 26px 20px;
+  }
 }

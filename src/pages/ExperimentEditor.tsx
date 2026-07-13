@@ -1,48 +1,51 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import "./ExperimentDetailView.css";
+import "./ExperimentEditor.css";
+import { StatusBadge } from "../components/StatusBadge";
+import { CheckIcon } from "../components/icons";
+import { SecureAttachmentDownloadButton, SecureAttachmentImage } from "../components/SecureAttachment";
 import type { AuthoringBlock, AuthoringBlockKind, ExperimentStatus, ProtocolStepStatus } from "../data/types";
 import { useLabData } from "../contexts/LabDataContext";
 import { useAuth } from "../contexts/AuthContext";
 import { AUTHORING_TEMPLATES, parseChecklist, parseDelimitedRows, parseKeyValueRows } from "../lib/authoringBlocks";
 
-type PanelTab = "ai" | "review" | "comments" | "tasks" | "history" | "files";
+type PanelTab = "ai" | "comments" | "history" | "files" | "review" | "tasks";
 type SaveState = "idle" | "saving" | "saved";
-
-const STATUS_META: Record<ExperimentStatus, { dot: string; label: string }> = {
-  active: { dot: "#4ade80", label: "Active" },
-  review: { dot: "#f87171", label: "Review" },
-  complete: { dot: "#93c5fd", label: "Complete" },
-  draft: { dot: "#9ca3af", label: "Draft" },
-};
 
 const STATUS_OPTIONS: { value: ExperimentStatus; label: string }[] = [
   { value: "draft", label: "Draft" },
   { value: "active", label: "Active" },
-  { value: "review", label: "Review" },
-  { value: "complete", label: "Complete" },
 ];
 
 const NOTE_SNIPPETS = [
-  { label: "Timestamp", value: () => `[${new Date().toLocaleString()}] ` },
-  { label: "Method Note", value: () => ["Method:", "Materials:", "Parameters:", "Rationale:"].join("\n") },
-  { label: "Deviation", value: () => ["Deviation:", "Reason:", "Impact:", "Follow-up:"].join("\n") },
-  { label: "Calculation", value: () => ["Calculation:", "Inputs:", "Formula:", "Result:"].join("\n") },
+  {
+    label: "Timestamp",
+    value: () => `[${new Date().toLocaleString()}] `,
+  },
+  {
+    label: "Method Note",
+    value: () => ["Method:", "Materials:", "Parameters:", "Rationale:"].join("\n"),
+  },
+  {
+    label: "Deviation",
+    value: () => ["Deviation:", "Reason:", "Impact:", "Follow-up:"].join("\n"),
+  },
+  {
+    label: "Calculation",
+    value: () => ["Calculation:", "Inputs:", "Formula:", "Result:"].join("\n"),
+  },
 ];
-
-function lineRows(text: string, charsPerLine = 78) {
-  return Math.max(2, Math.min(20, (text || "").split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / charsPerLine)), 0) + 1));
-}
 
 export function ExperimentEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { activeMember, user } = useAuth();
+  const { activeMember, firebaseUser, reauthenticateForSignature, user } = useAuth();
   const {
     experimentDetails,
     protocolTemplates,
     inventoryItems,
     projectRecords,
+    members,
     attachments,
     collaborationTasks,
     saveExperiment,
@@ -74,9 +77,15 @@ export function ExperimentEditor() {
   const [tagsDraft, setTagsDraft] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
   const [reviewDraft, setReviewDraft] = useState("");
-  const [reviewerName, setReviewerName] = useState("");
+  const [reviewerUid, setReviewerUid] = useState("");
   const [reviewDueDate, setReviewDueDate] = useState("");
   const [signatureDraft, setSignatureDraft] = useState("");
+  const [signaturePassword, setSignaturePassword] = useState("");
+  const [reviewPassword, setReviewPassword] = useState("");
+  const [signatureError, setSignatureError] = useState("");
+  const [isSigning, setIsSigning] = useState(false);
+  const [reviewAction, setReviewAction] = useState<"request" | "approve" | "reject" | null>(null);
+  const [reviewError, setReviewError] = useState("");
   const [amendmentDraft, setAmendmentDraft] = useState("");
   const [blockKind, setBlockKind] = useState<AuthoringBlockKind>("text");
   const [blockTitle, setBlockTitle] = useState("");
@@ -85,7 +94,6 @@ export function ExperimentEditor() {
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [uploadState, setUploadState] = useState("");
-  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
 
   const lots = useMemo(
     () =>
@@ -110,9 +118,12 @@ export function ExperimentEditor() {
     setDueDate(detail.dueDate ?? "");
     setTagsDraft(detail.tags.join(", "));
     setReviewDraft(detail.reviewComment ?? "");
-    setReviewerName(detail.reviewAssignedToName ?? "");
+    setReviewerUid(detail.reviewAssignedToUid ?? "");
     setReviewDueDate(detail.reviewDueDate ?? "");
     setSignatureDraft("");
+    setReviewPassword("");
+    setReviewAction(null);
+    setReviewError("");
     setAmendmentDraft("");
     setEditingBlockId(null);
     setBlockKind("text");
@@ -120,21 +131,37 @@ export function ExperimentEditor() {
     setBlockContent("");
     setBlockRequired(false);
     setSaveState("idle");
-    setExpandedSteps({});
   }, [detail]);
+
+  const notebookStats = useMemo(
+    () => ({
+      objective: textStats(objective),
+      notes: textStats(notes),
+      observations: textStats(observations),
+    }),
+    [objective, notes, observations],
+  );
+
+  const eligibleReviewers = useMemo(
+    () => members.filter((member) => (
+      member.status === "active"
+      && ["owner", "admin", "pi"].includes(member.role)
+      && member.uid !== detail?.ownerUid
+    )),
+    [detail?.ownerUid, members],
+  );
 
   if (!detail) {
     return (
-      <div className="xd-not-found">
+      <div className="editor-not-found">
         <p>Experiment "{id}" was not found.</p>
-        <button className="xd-btn-primary" onClick={() => navigate("/dashboard")}>
+        <button className="btn-primary" onClick={() => navigate("/dashboard")}>
           Back to Dashboard
         </button>
       </div>
     );
   }
 
-  const meta = STATUS_META[status] ?? STATUS_META.draft;
   const markDirty = () => setSaveState("idle");
   const isLocked = !!detail.locked;
   const linkedProject = projectRecords.find((project) => project.id === detail.projectId);
@@ -156,22 +183,36 @@ export function ExperimentEditor() {
       detail.piUid === activeMember.uid ||
       linkedProject?.ownerUid === activeMember.uid ||
       (linkedProject?.allowedMemberUids ?? []).includes(activeMember.uid));
-  const canReviewExperiment = !!activeMember && ["owner", "admin", "pi"].includes(activeMember.role);
-  const isReadOnly = isLocked || !canEditExperiment;
+  const canRequestReview =
+    !isLocked
+    && activeMember?.status === "active"
+    && detail.ownerUid === activeMember.uid
+    && ["owner", "admin", "pi", "researcher"].includes(activeMember.role)
+    && !["requested", "approved"].includes(detail.reviewStatus ?? "none");
+  const canReviewExperiment =
+    activeMember?.status === "active"
+    && ["owner", "admin", "pi"].includes(activeMember.role)
+    && detail.reviewStatus === "requested"
+    && detail.reviewAssignedToUid === activeMember.uid
+    && detail.ownerUid !== activeMember.uid;
+  const canAuthorSignExperiment =
+    !isLocked
+    && activeMember?.status === "active"
+    && ["owner", "admin", "pi", "researcher"].includes(activeMember.role)
+    && detail.ownerUid === activeMember.uid
+    && detail.reviewStatus === "approved";
+  const needsSignaturePassword = firebaseUser?.providerData.some((provider) => provider.providerId === "password") ?? false;
+  const isReadOnly = isLocked || detail.status === "review" || !canEditExperiment;
   const signingIssues = [
     !detail.objective.trim() ? "Objective is missing" : "",
     !detail.notes.trim() ? "Notebook notes are missing" : "",
     !detail.observations.trim() ? "Observations are missing" : "",
     detail.attachmentIds.length === 0 ? "Raw files are not attached" : "",
-    detail.protocol.some((step) => step.required !== false && step.status !== "done") ? "Required protocol steps are incomplete" : "",
-    detail.protocol.some((step) => step.required !== false && !step.reagentLotId) ? "Required reagent lots are not linked" : "",
+    detail.reviewStatus !== "approved" ? "Independent review has not been approved" : "",
+    detail.protocol.some((step) => step.status !== "done") ? "Protocol steps are incomplete" : "",
+    detail.protocol.some((step) => !step.reagentLotId) ? "Protocol reagent lots are not linked" : "",
     detail.authoringBlocks.some((block) => block.required && !block.content.trim()) ? "Required structured blocks are incomplete" : "",
   ].filter(Boolean);
-
-  const doneSteps = detail.protocol.filter((s) => s.status === "done").length;
-  const totalSteps = detail.protocol.length;
-  const stepsProgressPct = totalSteps ? Math.round((doneSteps / totalSteps) * 100) : 0;
-
   const cycleStatus = (current: ProtocolStepStatus): ProtocolStepStatus => {
     if (current === "pending") return "in_progress";
     if (current === "in_progress") return "done";
@@ -183,8 +224,75 @@ export function ExperimentEditor() {
     await updateProtocolStepStatus(detail.id, stepId, cycleStatus(currentStatus));
   };
 
-  const toggleStepExpanded = (stepId: string) => {
-    setExpandedSteps((prev) => ({ ...prev, [stepId]: !prev[stepId] }));
+  const handleSign = async () => {
+    if (needsSignaturePassword && !signaturePassword) {
+      setPanelTab("review");
+      setSignatureError("Enter your account password below to confirm this electronic signature.");
+      return;
+    }
+
+    setSignatureError("");
+    setIsSigning(true);
+    try {
+      await reauthenticateForSignature(signaturePassword);
+      await signExperiment(detail.id, "author", signatureDraft || "Signed as complete and accurate.");
+      setSignaturePassword("");
+      setSignatureDraft("");
+    } catch (err) {
+      setPanelTab("review");
+      setSignatureError(err instanceof Error ? err.message : "Unable to create the electronic signature.");
+    } finally {
+      setIsSigning(false);
+    }
+  };
+
+  const handleReviewRequest = async () => {
+    if (!reviewerUid) {
+      setPanelTab("review");
+      setReviewError("Choose an active, independent owner, admin, or PI before requesting review.");
+      return;
+    }
+
+    setReviewError("");
+    setReviewAction("request");
+    try {
+      await submitExperimentForReview(detail.id, reviewerUid, reviewDraft, reviewDueDate || null);
+    } catch (err) {
+      setPanelTab("review");
+      setReviewError(err instanceof Error ? err.message : "Unable to request independent review.");
+    } finally {
+      setReviewAction(null);
+    }
+  };
+
+  const handleReviewDecision = async (decision: "approved" | "rejected") => {
+    if (decision === "rejected" && !reviewDraft.trim()) {
+      setPanelTab("review");
+      setReviewError("A clear reason is required when requesting changes.");
+      return;
+    }
+    if (needsSignaturePassword && !reviewPassword) {
+      setPanelTab("review");
+      setReviewError("Enter your account password below to confirm this independent review decision.");
+      return;
+    }
+
+    setReviewError("");
+    setReviewAction(decision === "approved" ? "approve" : "reject");
+    try {
+      await reauthenticateForSignature(reviewPassword);
+      if (decision === "approved") {
+        await approveExperimentReview(detail.id, reviewDraft);
+      } else {
+        await rejectExperimentReview(detail.id, reviewDraft);
+      }
+      setReviewPassword("");
+    } catch (err) {
+      setPanelTab("review");
+      setReviewError(err instanceof Error ? err.message : "Unable to record the independent review decision.");
+    } finally {
+      setReviewAction(null);
+    }
   };
 
   const handleSave = async () => {
@@ -292,10 +400,9 @@ export function ExperimentEditor() {
         id: `block-${Date.now()}`,
         kind: "image",
         title: file.name,
-        content: record.downloadURL,
+        content: `Authenticated attachment: ${record.fileName}`,
         attachmentId: record.id,
         fileName: record.fileName,
-        imageUrl: record.downloadURL,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -305,11 +412,11 @@ export function ExperimentEditor() {
   const renderAuthoringBlock = (block: AuthoringBlock) => {
     if (block.kind === "table") {
       const rows = parseDelimitedRows(block.content);
-      if (rows.length === 0) return <p className="xd-block-empty">No table rows.</p>;
+      if (rows.length === 0) return <p className="authoring-empty">No table rows.</p>;
       const [header, ...body] = rows;
       return (
-        <div className="xd-authoring-table-wrap">
-          <table className="xd-authoring-table">
+        <div className="authoring-table-wrap">
+          <table className="authoring-table">
             <thead>
               <tr>{header.map((cell, index) => <th key={`${block.id}-h-${index}`}>{cell || `Column ${index + 1}`}</th>)}</tr>
             </thead>
@@ -328,7 +435,7 @@ export function ExperimentEditor() {
     if (block.kind === "checklist") {
       const items = parseChecklist(block.content);
       return (
-        <div className="xd-authoring-checklist">
+        <div className="authoring-checklist">
           {items.map((item, index) => (
             <label key={`${block.id}-check-${index}`}>
               <input type="checkbox" checked={item.checked} readOnly />
@@ -342,7 +449,7 @@ export function ExperimentEditor() {
     if (block.kind === "data") {
       const rows = parseKeyValueRows(block.content);
       return (
-        <dl className="xd-authoring-data">
+        <dl className="authoring-data-grid">
           {rows.map((row, index) => (
             <div key={`${block.id}-data-${index}`}>
               <dt>{row.key}</dt>
@@ -354,24 +461,20 @@ export function ExperimentEditor() {
     }
 
     if (block.kind === "image") {
-      const imageUrl = block.imageUrl || block.content;
+      const attachment = block.attachmentId ? experimentAttachments.find((item) => item.id === block.attachmentId) : undefined;
       return (
-        <div className="xd-authoring-image">
-          {imageUrl ? <img src={imageUrl} alt={block.title} /> : <p className="xd-block-empty">No image URL attached.</p>}
+        <div className="authoring-image-block">
+          <SecureAttachmentImage attachment={attachment} alt={block.title} />
           {block.fileName && <span>{block.fileName}</span>}
         </div>
       );
     }
 
     if (block.kind === "equation") {
-      return <div className="xd-authoring-equation">{block.content}</div>;
+      return <div className="authoring-equation">{block.content}</div>;
     }
 
-    return (
-      <div className="xd-authoring-richtext">
-        {block.content.split(/\n{2,}/).map((paragraph, index) => <p key={`${block.id}-p-${index}`}>{paragraph}</p>)}
-      </div>
-    );
+    return <div className="authoring-rich-text">{block.content.split(/\n{2,}/).map((paragraph, index) => <p key={`${block.id}-p-${index}`}>{paragraph}</p>)}</div>;
   };
 
   const startAmendment = async () => {
@@ -381,489 +484,534 @@ export function ExperimentEditor() {
 
   const experimentTasks = collaborationTasks.filter((task) => task.experimentId === detail.id);
 
-  const railTabs: { key: PanelTab; label: string }[] = [
-    { key: "ai", label: "AI" },
-    { key: "review", label: "Review" },
-    { key: "comments", label: `Comments (${detail.comments.length})` },
-    { key: "tasks", label: `Tasks (${experimentTasks.length})` },
-    { key: "history", label: "History" },
-    { key: "files", label: `Files (${experimentAttachments.length})` },
-  ];
-
   return (
-    <div className="xd-root">
-      <div className="xd-topbar">
-        <div className="xd-breadcrumb">
-          <span className="xd-breadcrumb-link" onClick={() => navigate("/dashboard")}>Experiments</span>
-          <span>/</span>
+    <>
+      <div className="editor-topbar">
+        <div className="editor-breadcrumb">
+          <a onClick={() => navigate("/dashboard")}>Experiments</a>
+          <span>&gt;</span>
           <span>{detail.project}</span>
-          <span>/</span>
-          <span className="xd-breadcrumb-current">{detail.name}</span>
+          <span>&gt;</span>
+          <span className="current">{detail.name}</span>
         </div>
-        <div className="xd-topbar-actions">
-          <span className="xd-status-pill" style={{ color: meta.dot }}>{meta.label}</span>
-          {isLocked && <span className="xd-pill-muted">Signed / Locked</span>}
-          {!isLocked && !canEditExperiment && <span className="xd-pill-muted">Read Only</span>}
-          {!isReadOnly && (
-            <button className="xd-btn-ghost" onClick={() => submitExperimentForReview(detail.id, reviewDraft, null, reviewerName || null, reviewDueDate || null)}>
-              Submit Review
+        <div className="editor-topbar-actions">
+          <StatusBadge status={status} />
+          {isLocked && <span className="editor-lock-pill">Signed / Locked</span>}
+          {!isLocked && detail.status === "review" && <span className="editor-lock-pill muted">Review controls record changes</span>}
+          {!isLocked && !canEditExperiment && <span className="editor-lock-pill muted">Read Only</span>}
+          {canRequestReview && (
+            <button className="btn-secondary" disabled={!reviewerUid || reviewAction !== null} onClick={() => void handleReviewRequest()}>
+              {reviewAction === "request" ? "Requesting..." : "Submit for Review"}
             </button>
           )}
-          {!isLocked && canReviewExperiment && detail.reviewStatus === "requested" && (
+          {canReviewExperiment && (
             <>
-              <button className="xd-btn-ghost" onClick={() => approveExperimentReview(detail.id, reviewDraft)}>Approve</button>
-              <button className="xd-btn-ghost" onClick={() => rejectExperimentReview(detail.id, reviewDraft || "Changes requested.")}>Reject</button>
+              <button className="btn-secondary" disabled={reviewAction !== null} onClick={() => void handleReviewDecision("approved")}>
+                {reviewAction === "approve" ? "Approving..." : "Approve"}
+              </button>
+              <button className="btn-secondary" disabled={reviewAction !== null} onClick={() => void handleReviewDecision("rejected")}>
+                {reviewAction === "reject" ? "Rejecting..." : "Request Changes"}
+              </button>
             </>
           )}
-          {!isReadOnly && (
-            <button className="xd-btn-ghost" disabled={signingIssues.length > 0} onClick={() => signExperiment(detail.id, "author", signatureDraft || "Signed as complete and accurate.")}>
-              E-Sign
+          {!isLocked && detail.ownerUid === activeMember?.uid && (
+            <button className="btn-secondary" disabled={signingIssues.length > 0 || !canAuthorSignExperiment || isSigning} onClick={handleSign}>
+              {isSigning ? "Signing..." : "E-Sign"}
             </button>
           )}
           {isLocked && (
-            <button className="xd-btn-ghost" onClick={startAmendment}>Create Amendment</button>
+            <button className="btn-secondary" onClick={startAmendment}>
+              Create Amendment
+            </button>
           )}
-          <button className="xd-btn-ghost" onClick={() => navigate(`/experiments/${detail.id}/report`)}>Print Report</button>
-          <button className="xd-btn-primary" disabled={isReadOnly} onClick={handleSave}>
+          <button className="btn-secondary" onClick={() => navigate(`/experiments/${detail.id}/report`)}>
+            Print Report
+          </button>
+          <button className="btn-save" disabled={isReadOnly} onClick={handleSave}>
             {saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Save"}
           </button>
         </div>
       </div>
 
-      <div className="xd-body">
-        <div className="xd-main">
-          <div className="xd-main-inner">
-            <textarea
-              className="xd-title"
-              value={title}
-              disabled={isReadOnly}
-              rows={lineRows(title, 42)}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                markDirty();
-              }}
-            />
+      <div className="editor-body">
+        <div className="editor-main">
+          <input
+            className="editor-title-input"
+            value={title}
+            disabled={isReadOnly}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              markDirty();
+            }}
+          />
 
-            <div className="xd-props">
-              <div className="xd-prop">
-                <span className="xd-prop-label">Project</span>
-                <span className="xd-prop-value">{detail.project}</span>
-              </div>
-              <div className="xd-prop">
-                <span className="xd-prop-label">Owner</span>
-                <span className="xd-prop-value">{detail.owner}</span>
-              </div>
-              <div className="xd-prop">
-                <span className="xd-prop-label">Modified</span>
-                <span className="xd-prop-value">{detail.modified}</span>
-              </div>
-              <div className="xd-prop">
-                <span className="xd-prop-label">ID</span>
-                <span className="xd-prop-value mono">{detail.id}</span>
-              </div>
-              <div className="xd-prop">
-                <span className="xd-prop-label">Tags</span>
-                <input
-                  value={tagsDraft}
-                  disabled={isReadOnly}
-                  placeholder="Comma separated"
-                  onChange={(e) => {
-                    setTagsDraft(e.target.value);
-                    markDirty();
-                  }}
-                  style={{ width: 160 }}
-                />
-              </div>
-              <div className="xd-prop">
-                <span className="xd-prop-label">Status</span>
-                <select
-                  className="xd-status-select"
-                  style={{ color: meta.dot }}
-                  value={status}
-                  disabled={isReadOnly}
-                  onChange={(e) => {
-                    setStatus(e.target.value as ExperimentStatus);
-                    markDirty();
-                  }}
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="xd-prop">
-                <span className="xd-prop-label">Linked Project</span>
-                <select
-                  value={projectId}
-                  disabled={isReadOnly}
-                  onChange={(e) => {
-                    setProjectId(e.target.value);
-                    markDirty();
-                  }}
-                >
-                  <option value="">Unlinked</option>
-                  {projectRecords.map((project) => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="xd-prop">
-                <span className="xd-prop-label">Notebook</span>
-                <input
-                  value={notebook}
-                  disabled={isReadOnly}
-                  onChange={(e) => {
-                    setNotebook(e.target.value);
-                    markDirty();
-                  }}
-                  style={{ width: 140 }}
-                />
-              </div>
-              <div className="xd-prop">
-                <span className="xd-prop-label">Due</span>
-                <input
-                  type="date"
-                  value={dueDate}
-                  disabled={isReadOnly}
-                  onChange={(e) => {
-                    setDueDate(e.target.value);
-                    markDirty();
-                  }}
-                />
-              </div>
+          <div className="editor-meta-row">
+            <div className="editor-meta-field">
+              <span className="editor-meta-field-label">Project</span>
+              <span className="editor-meta-field-value">{detail.project}</span>
             </div>
-
-            <div className="xd-toolbar">
-              <label className="xd-toolbar-picker">
-                <span>Protocol</span>
-                <select
-                  value={detail.protocolTemplateId ?? ""}
-                  disabled={isReadOnly}
-                  onChange={(e) => e.target.value && attachProtocolTemplate(detail.id, e.target.value)}
-                >
-                  <option value="">Default checklist</option>
-                  {protocolTemplates
-                    .filter((template) => template.status === "active")
-                    .map((template) => (
-                      <option key={template.id} value={template.id}>{template.name} v{template.version}</option>
-                    ))}
-                </select>
-              </label>
-              <label className="xd-file-btn">
-                {uploadState || "Upload File"}
-                <input type="file" disabled={isReadOnly} onChange={(e) => handleUpload(e.target.files?.[0])} />
-              </label>
-              <label className="xd-file-btn">
-                Inline Image
-                <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleInlineImageUpload(e.target.files?.[0])} />
-              </label>
+            <div className="editor-meta-field">
+              <span className="editor-meta-field-label">Modified</span>
+              <span className="editor-meta-field-value">{detail.modified}</span>
             </div>
-
-            <div className="xd-section">
-              <span className="xd-section-label">Objective</span>
-              <textarea
-                className="xd-textarea"
-                value={objective}
+            <div className="editor-meta-field">
+              <span className="editor-meta-field-label">ID</span>
+              <span className="editor-meta-field-value mono">{detail.id}</span>
+            </div>
+            <label className="editor-status-field">
+              <span>Status</span>
+              <select
+                value={status}
                 disabled={isReadOnly}
-                rows={lineRows(objective)}
-                placeholder="State the hypothesis, expected outcome, and success criteria..."
                 onChange={(e) => {
-                  setObjective(e.target.value);
+                  setStatus(e.target.value as ExperimentStatus);
                   markDirty();
                 }}
-              />
-            </div>
-
-            <div className="xd-section">
-              <span className="xd-section-label">Protocol · {doneSteps}/{totalSteps}</span>
-              <div className="xd-progress-track">
-                <div className="xd-progress-fill" style={{ width: `${stepsProgressPct}%` }} />
-              </div>
-              <div className="xd-steps">
-                {detail.protocol.map((step) => {
-                  const isDone = step.status === "done";
-                  const isProgress = step.status === "in_progress";
-                  const isExpanded = !!expandedSteps[step.id];
-                  return (
-                    <div className="xd-step" key={step.id}>
-                      <div className="xd-step-row">
-                        <button
-                          type="button"
-                          className="xd-step-check"
-                          style={{
-                            background: isDone ? "#22d3ee" : "transparent",
-                            border: isDone ? "none" : isProgress ? "1.5px solid #fbbf24" : "1.5px solid #2c333d",
-                          }}
-                          onClick={() => toggleStep(step.id, step.status)}
-                        >
-                          {isDone ? "✓" : ""}
-                        </button>
-                        <button
-                          type="button"
-                          className="xd-step-label"
-                          style={{ color: isDone ? "#6b7280" : "#e7e9ec", textDecoration: isDone ? "line-through" : "none" }}
-                          onClick={() => toggleStep(step.id, step.status)}
-                        >
-                          {step.label}
-                        </button>
-                        <span className="xd-step-meta">
-                          {isDone ? `${step.completedBy ?? ""} ${step.completedAt ?? ""}`.trim() : isProgress ? "In progress" : ""}
-                        </span>
-                        <button type="button" className="xd-step-expand-btn" onClick={() => toggleStepExpanded(step.id)}>
-                          {isExpanded ? "Hide details ▲" : "Details ▼"}
-                        </button>
-                      </div>
-                      {isExpanded && (
-                        <div className="xd-step-details">
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={step.required !== false}
-                              disabled={isReadOnly}
-                              onChange={(e) => updateProtocolStepDetails(detail.id, step.id, { required: e.target.checked })}
-                            />
-                            Required
-                          </label>
-                          <label>
-                            Timer
-                            <input
-                              type="number"
-                              min={0}
-                              defaultValue={step.timerMinutes ?? 0}
-                              disabled={isReadOnly}
-                              onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { timerMinutes: Number(e.target.value) })}
-                            />
-                          </label>
-                          {lots.length > 0 && (
-                            <select
-                              value={step.reagentLotId ?? ""}
-                              disabled={isReadOnly}
-                              onChange={(e) => linkProtocolStepLot(detail.id, step.id, e.target.value || null)}
-                            >
-                              <option value="">No lot linked</option>
-                              {lots.map((lot) => (
-                                <option key={lot.id} value={lot.id}>{lot.label}</option>
-                              ))}
-                            </select>
-                          )}
-                          <input
-                            defaultValue={step.note ?? ""}
-                            disabled={isReadOnly}
-                            placeholder="Step note"
-                            onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { note: e.target.value })}
-                          />
-                          <input
-                            defaultValue={step.deviation ?? ""}
-                            disabled={isReadOnly}
-                            placeholder="Deviation"
-                            onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { deviation: e.target.value })}
-                          />
-                          {!isReadOnly && (
-                            <label className="xd-step-file-btn">
-                              Step file
-                              <input type="file" onChange={(e) => handleUpload(e.target.files?.[0], step.id)} />
-                            </label>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="xd-section">
-              <span className="xd-section-label">Notebook Notes</span>
-              {!isReadOnly && (
-                <div className="xd-snippets">
-                  {NOTE_SNIPPETS.map((snippet) => (
-                    <button key={snippet.label} type="button" className="xd-chip" onClick={() => insertNoteSnippet(snippet.value())}>
-                      {snippet.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <textarea
-                className="xd-textarea"
-                value={notes}
-                disabled={isReadOnly}
-                rows={lineRows(notes)}
-                placeholder="Methods, calculations, deviations, and running notes..."
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                  markDirty();
-                }}
-              />
-            </div>
-
-            <div className="xd-section">
-              <span className="xd-section-label">Observations</span>
-              <textarea
-                className="xd-textarea"
-                value={observations}
-                disabled={isReadOnly}
-                rows={lineRows(observations)}
-                placeholder="Results, anomalies, images reviewed, and interpretation..."
-                onChange={(e) => {
-                  setObservations(e.target.value);
-                  markDirty();
-                }}
-              />
-            </div>
-
-            <div className="xd-section">
-              <div className="xd-section-row">
-                <span className="xd-section-label">Structured Blocks</span>
-              </div>
-              <div className="xd-block-templates">
-                {AUTHORING_TEMPLATES.map((template, index) => (
-                  <button key={template.label} type="button" className="xd-chip" disabled={isReadOnly} onClick={() => addTemplateBlock(index)}>
-                    {template.label}
-                  </button>
+              >
+                {status === "review" && <option value="review">Review (workflow controlled)</option>}
+                {status === "complete" && <option value="complete">Complete (signed)</option>}
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
-              </div>
-              <div className="xd-block-list">
-                {detail.authoringBlocks.length === 0 && <p className="xd-block-empty">No rich blocks yet.</p>}
-                {detail.authoringBlocks.map((block) => (
-                  <div key={block.id} className="xd-block">
-                    <div className="xd-block-head">
-                      <div>
-                        <span className="xd-block-title">{block.title}</span>
-                        <span className="xd-block-kind">{block.kind}{block.required ? " · required" : ""}</span>
-                      </div>
-                      {!isReadOnly && (
-                        <div className="xd-block-actions">
-                          <button type="button" onClick={() => editAuthoringBlock(block)}>Edit</button>
-                          <button type="button" onClick={() => deleteAuthoringBlock(block.id)}>Delete</button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="xd-block-body">{renderAuthoringBlock(block)}</div>
-                  </div>
+              </select>
+            </label>
+            <label className="editor-tags-field">
+              <span>Tags</span>
+              <input
+                value={tagsDraft}
+                disabled={isReadOnly}
+                onChange={(e) => {
+                  setTagsDraft(e.target.value);
+                  markDirty();
+                }}
+                placeholder="Comma separated"
+              />
+            </label>
+            <label className="editor-status-field">
+              <span>Project</span>
+              <select
+                value={projectId}
+                disabled={isReadOnly}
+                onChange={(e) => {
+                  setProjectId(e.target.value);
+                  markDirty();
+                }}
+              >
+                <option value="">Unlinked</option>
+                {projectRecords.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
                 ))}
+              </select>
+            </label>
+            <label className="editor-tags-field">
+              <span>Notebook</span>
+              <input
+                value={notebook}
+                disabled={isReadOnly}
+                onChange={(e) => {
+                  setNotebook(e.target.value);
+                  markDirty();
+                }}
+              />
+            </label>
+            <label className="editor-status-field">
+              <span>Due</span>
+              <input
+                type="date"
+                value={dueDate}
+                disabled={isReadOnly}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  markDirty();
+                }}
+              />
+            </label>
+          </div>
+
+          <div className="editor-toolbar">
+            <label className="editor-template-picker">
+              <span>Protocol</span>
+              <select
+                value={detail.protocolTemplateId ?? ""}
+                disabled={isReadOnly}
+                onChange={(e) => e.target.value && attachProtocolTemplate(detail.id, e.target.value)}
+              >
+                <option value="">Default checklist</option>
+                {protocolTemplates
+                  .filter((template) => template.status === "active" && template.steps.some((step) => step.trim()))
+                  .map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} v{template.version}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="toolbar-ai-btn file-upload-btn">
+              {uploadState || "Upload File"}
+              <input type="file" disabled={isReadOnly} onChange={(e) => handleUpload(e.target.files?.[0])} />
+            </label>
+            <label className="toolbar-ai-btn file-upload-btn">
+              Inline Image
+              <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleInlineImageUpload(e.target.files?.[0])} />
+            </label>
+          </div>
+
+          <div className="editor-card notebook-card">
+            <div className="notebook-header">
+              <div>
+                <span className="notebook-kicker">Experiment Notebook</span>
+                <h3>Record Notes</h3>
+                <p>Capture the hypothesis, live run notes, and final interpretation in one review-ready notebook surface.</p>
               </div>
-              {!isReadOnly && (
-                <div className="xd-block-builder">
-                  <div className="xd-block-builder-row">
-                    <select value={blockKind} onChange={(e) => setBlockKind(e.target.value as AuthoringBlockKind)}>
-                      <option value="text">Text</option>
-                      <option value="table">Table / CSV</option>
-                      <option value="image">Image Note</option>
-                      <option value="equation">Equation</option>
-                      <option value="checklist">Checklist</option>
-                      <option value="data">Structured Data</option>
-                    </select>
-                    <input value={blockTitle} onChange={(e) => setBlockTitle(e.target.value)} placeholder="Block title" />
-                    <label className="xd-checkbox-label">
-                      <input type="checkbox" checked={blockRequired} onChange={(e) => setBlockRequired(e.target.checked)} />
-                      Required before signing
-                    </label>
-                  </div>
-                  <textarea value={blockContent} onChange={(e) => setBlockContent(e.target.value)} rows={3} placeholder="Paste table data, equation, checklist, or structured observations..." />
-                  <div className="xd-block-builder-row">
-                    <button type="button" className="xd-btn-ghost" onClick={saveAuthoringBlock}>{editingBlockId ? "Save Block" : "Add Block"}</button>
-                    {editingBlockId && <button type="button" className="xd-btn-ghost" onClick={resetBlockForm}>Cancel Edit</button>}
-                  </div>
-                </div>
-              )}
+              <div className="notebook-summary">
+                <strong>{notebookStats.objective.words + notebookStats.notes.words + notebookStats.observations.words}</strong>
+                <span>Total words</span>
+              </div>
             </div>
 
-            {detail.aiInsights.length > 0 && (
-              <div className="xd-section">
-                <span className="xd-section-label">AI Insights</span>
-                <div className="xd-insights">
-                  {detail.aiInsights.map((insight) => {
-                    const dot = insight.kind === "alert" ? "#f87171" : insight.kind === "success" ? "#4ade80" : "#93c5fd";
-                    const bg = insight.kind === "alert" ? "#1e1315" : insight.kind === "success" ? "#0f1e15" : "#0f1c2e";
-                    const border = insight.kind === "alert" ? "#3a1e21" : insight.kind === "success" ? "#1c3d2a" : "#1c2e45";
-                    return (
-                      <div key={insight.id} className="xd-insight" style={{ background: bg, border: `1px solid ${border}` }}>
-                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
-                          <circle cx="7.5" cy="7.5" r="3" fill={dot} />
-                          <path d="M7.5 2v1.5M7.5 11.5V13M2 7.5h1.5M11.5 7.5H13" stroke={dot} strokeWidth="1.3" strokeLinecap="round" />
-                        </svg>
-                        <div>
-                          <div className="xd-insight-title">{insight.title}</div>
-                          <div className="xd-insight-body">{insight.body}</div>
-                        </div>
+            <div className="notebook-grid">
+              <section className="notebook-editor-pane">
+                <NotebookField
+                  label="Objective"
+                  eyebrow="Why this experiment exists"
+                  value={objective}
+                  disabled={isReadOnly}
+                  rows={4}
+                  stats={notebookStats.objective}
+                  placeholder="State the hypothesis, expected outcome, and success criteria..."
+                  onChange={(value) => {
+                    setObjective(value);
+                    markDirty();
+                  }}
+                />
+
+                <div className="notebook-field">
+                  <div className="notebook-field-header">
+                    <div>
+                      <span>Live notebook</span>
+                      <strong>Notebook Notes</strong>
+                    </div>
+                    <small>{notebookStats.notes.words} words / {notebookStats.notes.lines} lines</small>
+                  </div>
+                  {!isReadOnly && (
+                    <div className="notebook-snippet-row">
+                      {NOTE_SNIPPETS.map((snippet) => (
+                        <button key={snippet.label} type="button" className="notebook-chip" onClick={() => insertNoteSnippet(snippet.value())}>
+                          {snippet.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <textarea
+                    className="objective-textarea notebook-textarea large"
+                    value={notes}
+                    disabled={isReadOnly}
+                    onChange={(e) => {
+                      setNotes(e.target.value);
+                      markDirty();
+                    }}
+                    rows={9}
+                    placeholder="Methods, calculations, deviations, and running notes..."
+                  />
+                </div>
+
+                <NotebookField
+                  label="Observations"
+                  eyebrow="What happened and what it means"
+                  value={observations}
+                  disabled={isReadOnly}
+                  rows={5}
+                  stats={notebookStats.observations}
+                  placeholder="Results, anomalies, images reviewed, and interpretation..."
+                  onChange={(value) => {
+                    setObservations(value);
+                    markDirty();
+                  }}
+                />
+              </section>
+
+              <aside className="notebook-preview-pane">
+                <div className="notebook-preview-header">
+                  <span>Preview</span>
+                  <strong>{notebook || "General Notebook"}</strong>
+                </div>
+                <NotebookPreview title="Objective" value={objective} empty="No objective recorded yet." />
+                <NotebookPreview title="Notebook Notes" value={notes} empty="No running notes recorded yet." />
+                <NotebookPreview title="Observations" value={observations} empty="No observations recorded yet." />
+              </aside>
+            </div>
+
+            <h3>Structured Blocks</h3>
+            <div className="authoring-template-row">
+              {AUTHORING_TEMPLATES.map((template, index) => (
+                <button key={template.label} className="btn-secondary" type="button" disabled={isReadOnly} onClick={() => addTemplateBlock(index)}>
+                  {template.label}
+                </button>
+              ))}
+            </div>
+            <div className="authoring-block-list">
+              {detail.authoringBlocks.length === 0 && <p className="authoring-empty">No rich blocks yet.</p>}
+              {detail.authoringBlocks.map((block) => (
+                <div key={block.id} className="authoring-block">
+                  <div className="authoring-block-header">
+                    <div>
+                      <strong>{block.title}</strong>
+                      <span>{block.kind}{block.required ? " required" : ""}</span>
+                    </div>
+                    {!isReadOnly && (
+                      <div className="authoring-block-actions">
+                        <button className="btn-secondary" type="button" onClick={() => editAuthoringBlock(block)}>Edit</button>
+                        <button className="btn-secondary" type="button" onClick={() => deleteAuthoringBlock(block.id)}>Delete</button>
                       </div>
-                    );
-                  })}
+                    )}
+                  </div>
+                  {renderAuthoringBlock(block)}
+                </div>
+              ))}
+            </div>
+            {!isReadOnly && (
+              <div className="authoring-builder">
+                <select value={blockKind} onChange={(e) => setBlockKind(e.target.value as AuthoringBlockKind)}>
+                  <option value="text">Text</option>
+                  <option value="table">Table / CSV</option>
+                  <option value="image">Image Note</option>
+                  <option value="equation">Equation</option>
+                  <option value="checklist">Checklist</option>
+                  <option value="data">Structured Data</option>
+                </select>
+                <input value={blockTitle} onChange={(e) => setBlockTitle(e.target.value)} placeholder="Block title" />
+                <label className="authoring-required-toggle">
+                  <input type="checkbox" checked={blockRequired} onChange={(e) => setBlockRequired(e.target.checked)} />
+                  Required before signing
+                </label>
+                <textarea value={blockContent} onChange={(e) => setBlockContent(e.target.value)} rows={3} placeholder="Paste table data, equation, checklist, or structured observations..." />
+                <div className="workbench-actions">
+                  <button className="btn-secondary" type="button" onClick={saveAuthoringBlock}>{editingBlockId ? "Save Block" : "Add Block"}</button>
+                  {editingBlockId && <button className="btn-secondary" type="button" onClick={resetBlockForm}>Cancel Edit</button>}
                 </div>
               </div>
             )}
+            <h3>Protocol Steps</h3>
+            <div className="protocol-steps">
+              {detail.protocol.map((step) => (
+                <div key={step.id} className={`protocol-step ${step.status}`}>
+                  <div className="protocol-step-check" onClick={() => toggleStep(step.id, step.status)}>
+                    {step.status === "done" && <CheckIcon />}
+                  </div>
+                  <span className="protocol-step-label" onClick={() => toggleStep(step.id, step.status)}>
+                    {step.label}
+                  </span>
+                  {lots.length > 0 && (
+                    <select
+                      className="step-lot-select"
+                      value={step.reagentLotId ?? ""}
+                      disabled={isReadOnly}
+                      onChange={(e) => linkProtocolStepLot(detail.id, step.id, e.target.value || null)}
+                    >
+                      <option value="">No lot linked</option>
+                      {lots.map((lot) => (
+                        <option key={lot.id} value={lot.id}>
+                          {lot.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {step.status === "done" && (
+                    <span className="protocol-step-meta">
+                      {step.completedBy} {step.completedAt}
+                    </span>
+                  )}
+                  {step.status === "in_progress" && <span className="protocol-step-meta progress">In progress</span>}
+                  <div className="protocol-step-details">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={step.required !== false}
+                        disabled={isReadOnly}
+                        onChange={(e) => updateProtocolStepDetails(detail.id, step.id, { required: e.target.checked })}
+                      />
+                      Required
+                    </label>
+                    <label>
+                      Timer
+                      <input
+                        type="number"
+                        min={0}
+                        defaultValue={step.timerMinutes ?? 0}
+                        disabled={isReadOnly}
+                        onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { timerMinutes: Number(e.target.value) })}
+                      />
+                    </label>
+                    <input
+                      defaultValue={step.note ?? ""}
+                      disabled={isReadOnly}
+                      placeholder="Step note"
+                      onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { note: e.target.value })}
+                    />
+                    <input
+                      defaultValue={step.deviation ?? ""}
+                      disabled={isReadOnly}
+                      placeholder="Deviation"
+                      onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { deviation: e.target.value })}
+                    />
+                    {!isReadOnly && (
+                      <label className="step-file-upload">
+                        Step file
+                        <input type="file" onChange={(e) => handleUpload(e.target.files?.[0], step.id)} />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="xd-rail">
-          <div className="xd-rail-tabs">
-            {railTabs.map((tab) => (
+        <div className="editor-side-panel">
+          <div className="side-panel-tabs">
+            {(["ai", "review", "comments", "tasks", "history", "files"] as PanelTab[]).map((tab) => (
               <button
-                key={tab.key}
-                type="button"
-                className={`xd-rail-tab${panelTab === tab.key ? " active" : ""}`}
-                onClick={() => setPanelTab(tab.key)}
+                key={tab}
+                className={`side-panel-tab${panelTab === tab ? " active" : ""}`}
+                onClick={() => setPanelTab(tab)}
               >
-                {tab.label}
+                {tab === "ai"
+                  ? "AI"
+                  : tab === "review"
+                    ? "Review"
+                    : tab === "comments"
+                      ? `Comments (${detail.comments.length})`
+                      : tab === "tasks"
+                        ? `Tasks (${experimentTasks.length})`
+                        : tab === "files"
+                          ? `Files (${experimentAttachments.length})`
+                          : "History"}
               </button>
             ))}
           </div>
 
-          <div className="xd-rail-content">
-            {panelTab === "ai" && (
-              detail.aiInsights.length === 0
-                ? <p className="xd-rail-empty">No AI insights yet.</p>
-                : detail.aiInsights.map((insight) => (
-                    <div key={insight.id} className="xd-history-entry">
-                      <div className="xd-history-action">{insight.title}</div>
-                      <div className="xd-history-summary">{insight.body}</div>
-                    </div>
-                  ))
-            )}
+          <div className="side-panel-content">
+            {panelTab === "ai" &&
+              detail.aiInsights.map((insight) => (
+                <div key={insight.id} className={`insight-card ${insight.kind}`}>
+                  <div className="insight-card-title">{insight.title}</div>
+                  <p className="insight-card-body">{insight.body}</p>
+                </div>
+              ))}
 
             {panelTab === "review" && (
-              <>
-                <div className="xd-review-row"><span>Status</span><strong>{detail.reviewStatus ?? "none"}</strong></div>
-                <div className="xd-review-row"><span>Requested</span><strong>{detail.reviewRequestedBy || "Not requested"}</strong></div>
-                <div className="xd-review-row"><span>Reviewer</span><strong>{detail.reviewAssignedToName || "Unassigned"}</strong></div>
-                <div className="xd-review-row"><span>Due</span><strong>{detail.reviewDueDate || "No due date"}</strong></div>
+              <div className="review-panel">
+                <div className="review-row"><span>Status</span><strong>{detail.reviewStatus ?? "none"}</strong></div>
+                <div className="review-row"><span>Requested</span><strong>{detail.reviewRequestedBy || "Not requested"}</strong></div>
+                <div className="review-row"><span>Reviewer</span><strong>{detail.reviewAssignedToName || "Unassigned"}</strong></div>
+                <div className="review-row"><span>Due</span><strong>{detail.reviewDueDate || "No due date"}</strong></div>
                 {signingIssues.length > 0 && (
-                  <div className="xd-signing-blockers">
+                  <div className="signing-blocker-box">
                     <strong>Signing Blockers</strong>
                     {signingIssues.map((issue) => <span key={issue}>{issue}</span>)}
                   </div>
                 )}
-                <input className="xd-review-input" value={reviewerName} disabled={isReadOnly} onChange={(e) => setReviewerName(e.target.value)} placeholder="Assigned reviewer name" />
-                <input className="xd-review-input" type="date" value={reviewDueDate} disabled={isReadOnly} onChange={(e) => setReviewDueDate(e.target.value)} />
-                <textarea className="xd-review-input" value={reviewDraft} disabled={isReadOnly && !canReviewExperiment} onChange={(e) => setReviewDraft(e.target.value)} placeholder="Review note or rejection reason..." rows={3} />
-                <textarea className="xd-review-input" value={signatureDraft} disabled={isReadOnly} onChange={(e) => setSignatureDraft(e.target.value)} placeholder="Signature meaning/comment..." rows={2} />
-                {isLocked && (
-                  <textarea className="xd-review-input" value={amendmentDraft} onChange={(e) => setAmendmentDraft(e.target.value)} placeholder="Amendment reason..." rows={2} />
+                {canRequestReview && (
+                  <>
+                    <label className="review-control-label">
+                      <span>Independent reviewer</span>
+                      <select value={reviewerUid} onChange={(e) => setReviewerUid(e.target.value)}>
+                        <option value="">Choose an owner, admin, or PI</option>
+                        {eligibleReviewers.map((member) => (
+                          <option key={member.uid} value={member.uid}>{member.displayName} ({member.role})</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="review-control-label">
+                      <span>Review due date (optional)</span>
+                      <input type="date" value={reviewDueDate} onChange={(e) => setReviewDueDate(e.target.value)} />
+                    </label>
+                  </>
                 )}
-                <span className="xd-rail-subhead">Signatures</span>
-                {detail.signatures.length === 0 && <p className="xd-rail-empty">No signatures yet.</p>}
-                {detail.signatures.map((signature) => (
-                  <div key={signature.id} className="xd-history-entry">
-                    <div className="xd-history-action">{signature.signerName} — {signature.meaning}</div>
-                    <div className="xd-history-meta">{new Date(signature.signedAt).toLocaleString()}</div>
+                <textarea
+                  value={reviewDraft}
+                  disabled={!canRequestReview && !canReviewExperiment}
+                  onChange={(e) => setReviewDraft(e.target.value)}
+                  placeholder={canReviewExperiment ? "Approval note or required changes..." : "Context for the independent reviewer..."}
+                  rows={4}
+                />
+                {canAuthorSignExperiment && (
+                  <textarea value={signatureDraft} onChange={(e) => setSignatureDraft(e.target.value)} placeholder="Signature meaning/comment..." rows={3} />
+                )}
+                {needsSignaturePassword && canReviewExperiment && (
+                  <input
+                    type="password"
+                    value={reviewPassword}
+                    disabled={reviewAction !== null}
+                    onChange={(e) => {
+                      setReviewPassword(e.target.value);
+                      setReviewError("");
+                    }}
+                    placeholder="Confirm account password to review"
+                    autoComplete="current-password"
+                  />
+                )}
+                {needsSignaturePassword && canAuthorSignExperiment && (
+                  <input
+                    type="password"
+                    value={signaturePassword}
+                    disabled={isLocked || !canAuthorSignExperiment || isSigning}
+                    onChange={(e) => {
+                      setSignaturePassword(e.target.value);
+                      setSignatureError("");
+                    }}
+                    placeholder="Confirm account password to e-sign"
+                    autoComplete="current-password"
+                  />
+                )}
+                <p>Only the assigned independent reviewer can approve or request changes. Electronic signatures require an approved review, fresh account confirmation, and lock the record after signing.</p>
+                {reviewError && <div className="signature-error" role="alert">{reviewError}</div>}
+                {signatureError && <div className="signature-error" role="alert">{signatureError}</div>}
+                {isLocked && <textarea value={amendmentDraft} onChange={(e) => setAmendmentDraft(e.target.value)} placeholder="Amendment reason..." rows={3} />}
+                <h3>Review History</h3>
+                {(detail.reviewEvents?.length ?? 0) === 0 && <p>No independent review events yet.</p>}
+                {[...(detail.reviewEvents ?? [])].reverse().map((event) => (
+                  <div key={event.id} className="history-entry">
+                    <div className="history-action">
+                      {event.actorName} - {event.kind === "requested" ? "requested review" : event.kind === "approved" ? "approved review" : "requested changes"}
+                    </div>
+                    <div className="history-meta">
+                      {new Date(event.occurredAt).toLocaleString()} {event.kind === "requested" ? `- assigned to ${event.reviewerName}` : ""}
+                    </div>
+                    {event.dueDate && event.kind === "requested" && <div className="history-summary">Due {event.dueDate}</div>}
+                    {event.comment && <div className="history-summary">{event.comment}</div>}
                   </div>
                 ))}
-                <span className="xd-rail-subhead">Versions</span>
-                {detail.versions.length === 0 && <p className="xd-rail-empty">No version history yet.</p>}
+                <h3>Signatures</h3>
+                {detail.signatures.length === 0 && <p>No signatures yet.</p>}
+                {detail.signatures.map((signature) => (
+                  <div key={signature.id} className="history-entry">
+                    <div className="history-action">{signature.signerName} - {signature.meaning}</div>
+                    <div className="history-meta">{new Date(signature.signedAt).toLocaleString()}</div>
+                    {signature.manifestSha256 && <div className="history-summary mono">Evidence manifest SHA-256: {signature.manifestSha256}</div>}
+                  </div>
+                ))}
+                <h3>Versions</h3>
+                {detail.versions.length === 0 && <p>No version history yet.</p>}
                 {detail.versions.map((version) => (
-                  <div key={version.id} className="xd-history-entry">
-                    <div className="xd-history-action">v{version.versionNumber}.{version.revisionNumber ?? 0} — {version.label}</div>
-                    <div className="xd-history-meta">
+                  <div key={version.id} className="history-entry">
+                    <div className="history-action">
+                      v{version.versionNumber}.{version.revisionNumber ?? 0} - {version.label}
+                    </div>
+                    <div className="history-meta">
                       {new Date(version.createdAt).toLocaleString()} by {version.createdBy} on {version.deviceLabel ?? "unknown device"}
                     </div>
-                    <div className="xd-history-summary">{version.snapshotSummary}</div>
+                    <div className="history-summary">{version.snapshotSummary}</div>
                     {(version.fieldChanges?.length ?? 0) > 0 && (
-                      <div className="xd-change-list">
+                      <div className="revision-change-list">
                         {version.fieldChanges?.map((change, index) => (
-                          <div key={`${version.id}-${change.field}-${index}`} className="xd-change">
+                          <div key={`${version.id}-${change.field}-${index}`} className="revision-change">
                             <strong>{change.field}</strong>
                             <span>{change.before}</span>
-                            <span>→</span>
                             <span>{change.after}</span>
                           </div>
                         ))}
@@ -871,72 +1019,55 @@ export function ExperimentEditor() {
                     )}
                   </div>
                 ))}
-              </>
+              </div>
             )}
 
-            {panelTab === "comments" && (
-              detail.comments.length === 0
-                ? <p className="xd-rail-empty">No comments yet.</p>
-                : detail.comments.map((c) => (
-                    <div key={c.id} className="xd-comment">
-                      <div className="xd-comment-head">
-                        <div className="xd-avatar">{c.initials}</div>
-                        <span className="xd-comment-author">{c.author}</span>
-                        <span className="xd-comment-time">{c.postedAt}</span>
-                      </div>
-                      <p className="xd-comment-body">{c.body}</p>
-                    </div>
-                  ))
-            )}
+            {panelTab === "comments" &&
+              detail.comments.map((c) => (
+                <div key={c.id} className="comment-card">
+                  <div className="comment-card-header">
+                    <div className="comment-avatar">{c.initials}</div>
+                    <span className="comment-author">{c.author}</span>
+                    <span className="comment-time">{c.postedAt}</span>
+                  </div>
+                  <p className="comment-body">{c.body}</p>
+                </div>
+              ))}
 
-            {panelTab === "tasks" && (
-              experimentTasks.length === 0
-                ? <p className="xd-rail-empty">No linked tasks.</p>
-                : experimentTasks.map((task) => (
-                    <div key={task.id} className="xd-task">
-                      <div className="xd-task-head">
-                        <span className="xd-task-title">{task.title}</span>
-                        <span className="xd-task-status">{task.status.replace("_", " ")}</span>
-                      </div>
-                      <p className="xd-task-desc">{task.description || "No description."}</p>
-                    </div>
-                  ))
-            )}
+            {panelTab === "tasks" &&
+              experimentTasks.map((task) => (
+                <div key={task.id} className="comment-card">
+                  <div className="comment-card-header">
+                    <span className="comment-author">{task.title}</span>
+                    <span className="comment-time">{task.status.replace("_", " ")}</span>
+                  </div>
+                  <p className="comment-body">{task.description || "No description."}</p>
+                </div>
+              ))}
 
-            {panelTab === "history" && (
-              detail.history.length === 0
-                ? <p className="xd-rail-empty">No history yet.</p>
-                : detail.history.map((h) => (
-                    <div key={h.id} className="xd-history-entry">
-                      <div className="xd-history-action">{h.actor} — {h.action}</div>
-                      <div className="xd-history-meta">{h.timestamp}{h.deviceLabel ? ` · ${h.deviceLabel}` : ""}</div>
-                    </div>
-                  ))
-            )}
+            {panelTab === "history" &&
+              detail.history.map((h) => (
+                <div key={h.id} className="history-entry">
+                  <div className="history-action">
+                    {h.actor} - {h.action}
+                  </div>
+                  <div className="history-meta">
+                    {h.timestamp}
+                    {h.deviceLabel ? ` - ${h.deviceLabel}` : ""}
+                  </div>
+                </div>
+              ))}
 
-            {panelTab === "files" && (
-              <>
-                {experimentAttachments.length === 0
-                  ? <p className="xd-rail-empty">No files attached yet.</p>
-                  : experimentAttachments.map((file) => (
-                      <a key={file.id} className="xd-file-row" href={file.downloadURL} target="_blank" rel="noreferrer">
-                        <span>{file.fileName}</span>
-                        <small>{Math.ceil(file.size / 1024)} KB</small>
-                      </a>
-                    ))}
-                {!isReadOnly && (
-                  <label className="xd-file-btn xd-upload-row">
-                    {uploadState || "Upload File"}
-                    <input type="file" onChange={(e) => handleUpload(e.target.files?.[0])} />
-                  </label>
-                )}
-              </>
-            )}
+            {panelTab === "files" &&
+              experimentAttachments.map((file) => (
+                <SecureAttachmentDownloadButton key={file.id} attachment={file} className="attachment-row" />
+              ))}
           </div>
 
           {panelTab === "comments" && (
-            <div className="xd-rail-footer">
+            <div className="side-panel-footer">
               <input
+                className="comment-input"
                 placeholder="Add a comment..."
                 value={commentDraft}
                 onChange={(e) => setCommentDraft(e.target.value)}
@@ -948,6 +1079,75 @@ export function ExperimentEditor() {
           )}
         </div>
       </div>
-    </div>
+    </>
+  );
+}
+
+type TextStats = {
+  words: number;
+  lines: number;
+};
+
+function textStats(value: string): TextStats {
+  const words = value.trim().split(/\s+/).filter(Boolean).length;
+  const lines = value.trim() ? value.split(/\r?\n/).length : 0;
+  return { words, lines };
+}
+
+function NotebookField({
+  label,
+  eyebrow,
+  value,
+  disabled,
+  rows,
+  stats,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  eyebrow: string;
+  value: string;
+  disabled: boolean;
+  rows: number;
+  stats: TextStats;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="notebook-field">
+      <div className="notebook-field-header">
+        <div>
+          <span>{eyebrow}</span>
+          <strong>{label}</strong>
+        </div>
+        <small>{stats.words} words / {stats.lines} lines</small>
+      </div>
+      <textarea
+        className="objective-textarea notebook-textarea"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+      />
+    </label>
+  );
+}
+
+function NotebookPreview({ title, value, empty }: { title: string; value: string; empty: string }) {
+  const paragraphs = value
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  return (
+    <section className="notebook-preview-section">
+      <h4>{title}</h4>
+      {paragraphs.length === 0 ? (
+        <p className="notebook-preview-empty">{empty}</p>
+      ) : (
+        paragraphs.map((paragraph, index) => <p key={`${title}-${index}`}>{paragraph}</p>)
+      )}
+    </section>
   );
 }

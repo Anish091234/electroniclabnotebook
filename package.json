@@ -3,12 +3,20 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12 <23"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test:rules:types": "tsc -p tsconfig.rules-test.json --noEmit",
+    "test:rules:raw": "vitest run test",
+    "test:rules": "npx firebase-tools@15.23.0 emulators:exec --only firestore,storage --project labos-security-test \"npm run test:rules:raw\"",
+    "verify": "npm run lint && npm run build && npm run test:rules:types && npm run test:rules",
     "preview": "vite preview",
-    "firebase:deploy-rules": "npx firebase-tools deploy --only firestore:rules,storage"
+    "firebase:deploy-rules": "npx --yes firebase-tools@15.23.0 deploy --only firestore:rules,storage",
+    "firebase:deploy-backend": "npm run test:rules && npx --yes firebase-tools@15.23.0 deploy --only functions,firestore:rules,storage"
   },
   "dependencies": {
     "firebase": "^12.15.0",
@@ -17,12 +25,14 @@
     "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "^4.1.10"
   }
 }

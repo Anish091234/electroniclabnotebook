@@ -1,33 +1,36 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import "./Dashboard.css";
 import "./Team.css";
-import type { LabInvite, LabMember, LabRole } from "../data/accountTypes";
+import type { LabInvite, LabMember, LabOwnershipTransfer, LabRole } from "../data/accountTypes";
 import { useAuth } from "../contexts/AuthContext";
 import {
+  acceptLabOwnershipTransfer,
   cancelLabInvite,
+  cancelLabOwnershipTransfer,
   createLabInvite,
+  declineLabOwnershipTransfer,
+  initiateLabOwnershipTransfer,
   subscribeLabInvites,
   subscribeLabMembers,
+  subscribeLabOwnershipTransfers,
   updateLabMember,
 } from "../services/accountService";
 
-type InviteRole = Exclude<LabRole, "owner">;
+type InviteRole = Exclude<LabRole, "owner" | "external">;
+type AssignableMemberRole = Exclude<LabRole, "owner" | "external">;
 
 const INVITE_ROLE_OPTIONS: { value: InviteRole; label: string }[] = [
   { value: "researcher", label: "Researcher" },
   { value: "pi", label: "PI" },
   { value: "admin", label: "Admin" },
   { value: "viewer", label: "Viewer" },
-  { value: "external", label: "External Collaborator" },
 ];
 
-const MEMBER_ROLE_OPTIONS: { value: LabRole; label: string }[] = [
-  { value: "owner", label: "Owner / PI" },
+const MEMBER_ROLE_OPTIONS: { value: AssignableMemberRole; label: string }[] = [
   { value: "admin", label: "Admin" },
   { value: "pi", label: "PI" },
   { value: "researcher", label: "Researcher" },
   { value: "viewer", label: "Viewer" },
-  { value: "external", label: "External Collaborator" },
 ];
 
 const EMPTY_INVITE_FORM = {
@@ -39,8 +42,6 @@ const EMPTY_INVITE_FORM = {
 
 type InviteMode = "user" | "pi";
 
-const configuredAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim().replace(/\/+$/, "");
-
 export function Team() {
   const { activeLab, activeMember, user } = useAuth();
   const [members, setMembers] = useState<LabMember[]>([]);
@@ -51,13 +52,20 @@ export function Team() {
   const [isInvitesLoading, setIsInvitesLoading] = useState(true);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
+  const [cancelingInviteId, setCancelingInviteId] = useState<string | null>(null);
   const [emailPreview, setEmailPreview] = useState<{ to: string; subject: string; body: string; inviteUrl: string } | null>(null);
-  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [inviteForm, setInviteForm] = useState(EMPTY_INVITE_FORM);
   const [inviteMode, setInviteMode] = useState<InviteMode>("user");
+  const [ownershipTransfers, setOwnershipTransfers] = useState<LabOwnershipTransfer[]>([]);
+  const [ownershipError, setOwnershipError] = useState<string | null>(null);
+  const [ownershipTarget, setOwnershipTarget] = useState<LabMember | null>(null);
+  const [ownershipConfirmationEmail, setOwnershipConfirmationEmail] = useState("");
+  const [isOwnershipSubmitting, setIsOwnershipSubmitting] = useState(false);
+  const [ownershipActionId, setOwnershipActionId] = useState<string | null>(null);
 
   const canManageInvites = activeMember?.role === "owner" || activeMember?.role === "admin";
-  const canManageAccounts = canManageInvites;
+  const canInvitePrivileged = activeMember?.role === "owner";
+  const canManageAccounts = activeMember?.role === "owner";
 
   useEffect(() => {
     if (!activeLab) {
@@ -102,6 +110,23 @@ export function Team() {
     );
   }, [activeLab, canManageInvites]);
 
+  useEffect(() => {
+    if (!activeLab || !activeMember) {
+      setOwnershipTransfers([]);
+      return undefined;
+    }
+
+    return subscribeLabOwnershipTransfers(
+      activeLab.id,
+      activeMember.uid,
+      (nextTransfers) => {
+        setOwnershipTransfers(nextTransfers);
+        setOwnershipError(null);
+      },
+      (err) => setOwnershipError(err.message),
+    );
+  }, [activeLab, activeMember]);
+
   const piMembers = useMemo(
     () => members.filter((member) => member.role === "owner" || member.role === "pi"),
     [members],
@@ -133,7 +158,23 @@ export function Team() {
     [members],
   );
 
+  const pendingOwnershipTransfers = useMemo(
+    () => ownershipTransfers.filter((transfer) => transfer.status === "pending"),
+    [ownershipTransfers],
+  );
+
+  const outgoingOwnershipTransfer = useMemo(
+    () => pendingOwnershipTransfers.find((transfer) => transfer.initiatedByUid === activeMember?.uid) ?? null,
+    [activeMember?.uid, pendingOwnershipTransfers],
+  );
+
+  const incomingOwnershipTransfer = useMemo(
+    () => pendingOwnershipTransfers.find((transfer) => transfer.targetUid === activeMember?.uid) ?? null,
+    [activeMember?.uid, pendingOwnershipTransfers],
+  );
+
   const openInviteModal = (role: InviteRole = "researcher") => {
+    if ((role === "pi" || role === "admin") && !canInvitePrivileged) return;
     setInviteError(null);
     setInviteMode(role === "pi" ? "pi" : "user");
     setInviteForm({
@@ -168,27 +209,26 @@ export function Team() {
       setInviteError("Choose a PI for this researcher.");
       return;
     }
+    if (["admin", "pi"].includes(inviteForm.role) && !canInvitePrivileged) {
+      setInviteError("Only the lab owner can issue admin or PI invites.");
+      return;
+    }
 
     setInviteError(null);
     setIsInviteSubmitting(true);
 
     try {
-      const invite = await createLabInvite({
+      const createdInvite = await createLabInvite({
         labId: activeLab.id,
-        labName: activeLab.name,
         email: inviteForm.email,
         displayName: inviteForm.displayName,
         role: inviteForm.role,
         piUid: inviteForm.piUid || null,
-        invitedByUid: user.uid,
-        invitedByName: user.name,
-        appOrigin: configuredAppUrl || window.location.origin,
       });
       closeInviteModal();
-      const email = inviteEmailFor(invite);
+      const email = inviteEmailFor(createdInvite.invite, createdInvite.inviteUrl);
       if (email) {
         setEmailPreview(email);
-        await copyText(email.body);
       }
     } catch (err) {
       setInviteError(err instanceof Error ? err.message : "Unable to create invite");
@@ -198,39 +238,109 @@ export function Team() {
 
   const handleCancelInvite = async (inviteId: string) => {
     if (!activeLab) return;
-    await cancelLabInvite(activeLab.id, inviteId);
+    setInviteError(null);
+    setCancelingInviteId(inviteId);
+    try {
+      await cancelLabInvite(activeLab.id, inviteId);
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : "Unable to cancel invite");
+    } finally {
+      setCancelingInviteId(null);
+    }
   };
 
   const updateMemberRole = async (member: LabMember, role: LabRole) => {
     if (!activeLab || member.uid === activeMember?.uid || !canManageAccounts) return;
-    await updateLabMember(activeLab.id, member.uid, {
-      role,
-      piUid: role === "researcher" ? member.piUid || piMembers[0]?.uid || null : role === "pi" ? member.uid : null,
-    });
+    try {
+      await updateLabMember(activeLab.id, member.uid, {
+        role,
+        piUid: role === "researcher" ? member.piUid || piMembers[0]?.uid || null : role === "pi" ? member.uid : null,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update member role");
+    }
   };
 
   const updateMemberPi = async (member: LabMember, piUid: string) => {
     if (!activeLab || !canManageAccounts) return;
-    await updateLabMember(activeLab.id, member.uid, { piUid: piUid || null });
+    try {
+      await updateLabMember(activeLab.id, member.uid, { piUid: piUid || null });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update PI assignment");
+    }
   };
 
   const toggleMemberStatus = async (member: LabMember) => {
     if (!activeLab || member.uid === activeMember?.uid || !canManageAccounts) return;
-    await updateLabMember(activeLab.id, member.uid, { status: member.status === "disabled" ? "active" : "disabled" });
+    try {
+      await updateLabMember(activeLab.id, member.uid, { status: member.status === "disabled" ? "active" : "disabled" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update member status");
+    }
   };
 
-  const appOrigin = configuredAppUrl || window.location.origin;
-
-  const inviteUrlFor = (invite: LabInvite) => {
-    const fallbackUrl = `${appOrigin}/login`;
-    const url = new URL(invite.inviteUrl || fallbackUrl);
-    url.searchParams.set("invite", invite.token);
-    url.searchParams.set("inviteId", invite.id);
-    url.searchParams.set("labId", activeLab?.id ?? "");
-    return url.toString();
+  const openOwnershipTransfer = (member: LabMember) => {
+    if (!canManageAccounts || outgoingOwnershipTransfer || member.uid === activeMember?.uid || member.status !== "active" || member.role === "owner") {
+      return;
+    }
+    setOwnershipError(null);
+    setOwnershipTarget(member);
+    setOwnershipConfirmationEmail("");
   };
 
-  const inviteEmailFor = (invite: LabInvite) => {
+  const closeOwnershipTransfer = () => {
+    if (isOwnershipSubmitting) return;
+    setOwnershipTarget(null);
+    setOwnershipConfirmationEmail("");
+  };
+
+  const submitOwnershipTransfer = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!activeLab || !ownershipTarget || !canManageAccounts) return;
+    setOwnershipError(null);
+    setIsOwnershipSubmitting(true);
+    try {
+      await initiateLabOwnershipTransfer({
+        labId: activeLab.id,
+        targetUid: ownershipTarget.uid,
+        confirmationEmail: ownershipConfirmationEmail,
+      });
+      setOwnershipTarget(null);
+      setOwnershipConfirmationEmail("");
+    } catch (err) {
+      setOwnershipError(err instanceof Error ? err.message : "Unable to request ownership transfer");
+    } finally {
+      setIsOwnershipSubmitting(false);
+    }
+  };
+
+  const resolveOwnershipTransfer = async (transfer: LabOwnershipTransfer, action: "accept" | "decline" | "cancel") => {
+    if (!activeLab) return;
+    const prompt = action === "accept"
+      ? "Accepting makes you the lab owner and changes the former owner to PI. Continue?"
+      : action === "decline"
+        ? "Decline this ownership-transfer request? No permissions will change."
+        : "Cancel this pending ownership-transfer request? No permissions will change.";
+    if (!window.confirm(prompt)) return;
+
+    setOwnershipError(null);
+    setOwnershipActionId(transfer.id);
+    try {
+      if (action === "accept") {
+        await acceptLabOwnershipTransfer(activeLab.id, transfer.id);
+      } else if (action === "decline") {
+        await declineLabOwnershipTransfer(activeLab.id, transfer.id);
+      } else {
+        await cancelLabOwnershipTransfer(activeLab.id, transfer.id);
+      }
+    } catch (err) {
+      setOwnershipError(err instanceof Error ? err.message : "Unable to update ownership transfer");
+    } finally {
+      setOwnershipActionId(null);
+    }
+  };
+
+  const inviteEmailFor = (invite: LabInvite, inviteUrl: string) => {
     if (!activeLab || !user) return;
     const role = roleLabel(invite.role).toLowerCase();
     const subject =
@@ -245,12 +355,12 @@ export function Team() {
         ? ["", "When you accept, LabOS will create your PI group so researchers can be assigned under you."]
         : []),
       "",
-      `Accept the invite here: ${inviteUrlFor(invite)}`,
+      `Accept the invite here: ${inviteUrl}`,
       "",
       "If you were not expecting this invite, you can ignore this email.",
     ].join("\r\n");
 
-    return { to: invite.email, subject, body, inviteUrl: inviteUrlFor(invite) };
+    return { to: invite.email, subject, body, inviteUrl };
   };
 
   const copyText = async (text: string) => {
@@ -262,35 +372,6 @@ export function Team() {
     }
   };
 
-  const copyInviteLink = async (invite: LabInvite) => {
-    const inviteUrl = inviteUrlFor(invite);
-    await copyText(inviteUrl);
-    setCopiedInviteId(invite.id);
-    window.setTimeout(() => setCopiedInviteId((current) => (current === invite.id ? null : current)), 2000);
-  };
-
-  const copyInviteEmail = async (invite: LabInvite) => {
-    const email = inviteEmailFor(invite);
-    if (!email) return;
-    await copyText(email.body);
-    setCopiedInviteId(invite.id);
-    window.setTimeout(() => setCopiedInviteId((current) => (current === invite.id ? null : current)), 2000);
-  };
-
-  const openInviteEmail = async (invite: LabInvite) => {
-    const email = inviteEmailFor(invite);
-    if (!email) return;
-    setEmailPreview(email);
-    await copyText(email.body);
-
-    const params = new URLSearchParams({
-      subject: email.subject,
-      body: email.body,
-    });
-
-    window.location.href = `mailto:${encodeURIComponent(email.to)}?${params.toString()}`;
-  };
-
   return (
     <>
       <div className="topbar">
@@ -299,7 +380,7 @@ export function Team() {
           <button className="btn-secondary" disabled={!canManageInvites} onClick={() => openInviteModal("researcher")}>
             Invite User
           </button>
-          <button className="btn-primary" disabled={!canManageInvites} onClick={() => openInviteModal("pi")}>
+          <button className="btn-primary" disabled={!canInvitePrivileged} onClick={() => openInviteModal("pi")}>
             Add PI
           </button>
         </div>
@@ -337,9 +418,64 @@ export function Team() {
         {isLoading && <div className="team-empty">Loading lab accounts...</div>}
         {error && <div className="team-error">{error}</div>}
         {inviteError && !isInviteOpen && <div className="team-error">{inviteError}</div>}
+        {ownershipError && <div className="team-error">{ownershipError}</div>}
 
         {!isLoading && !error && (
           <>
+            {(outgoingOwnershipTransfer || incomingOwnershipTransfer) && (
+              <section className="team-section">
+                <div className="team-section-header">
+                  <h2>Ownership Transfer</h2>
+                  <p>Ownership changes only after both people explicitly confirm.</p>
+                </div>
+                <div className="ownership-transfer-list">
+                  {outgoingOwnershipTransfer && (
+                    <article className="ownership-transfer-card">
+                      <div>
+                        <h3>Awaiting {outgoingOwnershipTransfer.targetName}</h3>
+                        <p>
+                          You remain the owner until they accept. This request expires {formatTransferExpiry(outgoingOwnershipTransfer.expiresAt)}.
+                        </p>
+                      </div>
+                      <button
+                        className="invite-cancel-btn"
+                        disabled={ownershipActionId === outgoingOwnershipTransfer.id}
+                        onClick={() => resolveOwnershipTransfer(outgoingOwnershipTransfer, "cancel")}
+                      >
+                        {ownershipActionId === outgoingOwnershipTransfer.id ? "Canceling..." : "Cancel transfer"}
+                      </button>
+                    </article>
+                  )}
+                  {incomingOwnershipTransfer && (
+                    <article className="ownership-transfer-card incoming">
+                      <div>
+                        <h3>{incomingOwnershipTransfer.initiatedByName} requested an ownership transfer</h3>
+                        <p>
+                          If you accept, you become the lab owner and {incomingOwnershipTransfer.initiatedByName} remains an active PI. This request expires {formatTransferExpiry(incomingOwnershipTransfer.expiresAt)}.
+                        </p>
+                      </div>
+                      <div className="ownership-transfer-actions">
+                        <button
+                          className="invite-cancel-btn"
+                          disabled={ownershipActionId === incomingOwnershipTransfer.id}
+                          onClick={() => resolveOwnershipTransfer(incomingOwnershipTransfer, "decline")}
+                        >
+                          Decline
+                        </button>
+                        <button
+                          className="btn-primary"
+                          disabled={ownershipActionId === incomingOwnershipTransfer.id}
+                          onClick={() => resolveOwnershipTransfer(incomingOwnershipTransfer, "accept")}
+                        >
+                          {ownershipActionId === incomingOwnershipTransfer.id ? "Accepting..." : "Accept ownership"}
+                        </button>
+                      </div>
+                    </article>
+                  )}
+                </div>
+              </section>
+            )}
+
             <section className="team-section">
               <div className="team-section-header">
                 <h2>PI Groups</h2>
@@ -392,14 +528,7 @@ export function Team() {
                       </div>
                     </div>
 
-                    <div className="pi-card-actions">
-                      <button className="invite-cancel-btn" onClick={() => copyInviteLink(invite)}>
-                        {copiedInviteId === invite.id ? "Copied" : "Copy Link"}
-                      </button>
-                      <button className="invite-cancel-btn" onClick={() => openInviteEmail(invite)}>
-                        Email Invite
-                      </button>
-                    </div>
+                    <small className="invite-email-state">The secure link was shown once when this invite was created.</small>
                   </article>
                 ))}
 
@@ -429,7 +558,7 @@ export function Team() {
               <section className="team-section">
                 <div className="team-section-header">
                   <h2>Pending Invites</h2>
-                  <p>Invites are stored at labs/{activeLab?.id}/invites.</p>
+                  <p>Secure links are returned once at creation and are never stored with invite records.</p>
                 </div>
 
                 <div className="invite-list">
@@ -442,28 +571,13 @@ export function Team() {
                       <div>
                         <h3>{invite.displayName}</h3>
                         <p>{invite.email}</p>
-                        <code className="invite-link-preview">{inviteUrlFor(invite)}</code>
+                        <small className="invite-email-state">Link shown once at creation. Cancel and issue a new invite to resend.</small>
                       </div>
                       <span className="invite-role-pill">{roleLabel(invite.role)}</span>
                       <span className="invite-meta">{inviteMetaFor(invite, members)}</span>
-                      <button
-                        className="invite-cancel-btn"
-                        onClick={() => copyInviteLink(invite)}
-                      >
-                        {copiedInviteId === invite.id ? "Copied" : "Copy Link"}
+                      <button className="invite-cancel-btn" disabled={cancelingInviteId === invite.id} onClick={() => handleCancelInvite(invite.id)}>
+                        {cancelingInviteId === invite.id ? "Canceling..." : "Cancel"}
                       </button>
-                      <button className="invite-cancel-btn" onClick={() => openInviteEmail(invite)}>
-                        Email Invite
-                      </button>
-                      <button className="invite-cancel-btn" onClick={() => copyInviteEmail(invite)}>
-                        Copy Email
-                      </button>
-                      <button className="invite-cancel-btn" onClick={() => handleCancelInvite(invite.id)}>
-                        Cancel
-                      </button>
-                      <small className="invite-email-state">
-                        Spark-safe invite link. Email Invite opens your mail app and copies the full invite text as backup.
-                      </small>
                     </article>
                   ))}
                 </div>
@@ -501,6 +615,7 @@ export function Team() {
                         <td>
                           {canManageAccounts && member.uid !== activeMember?.uid ? (
                             <select className="team-inline-select" value={member.role} onChange={(e) => updateMemberRole(member, e.target.value as LabRole)}>
+                              {member.role === "external" && <option value="external" disabled>External Collaborator (access disabled)</option>}
                               {MEMBER_ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                           ) : (
@@ -520,9 +635,20 @@ export function Team() {
                         </td>
                         {canManageAccounts && (
                           <td>
-                            <button className="invite-cancel-btn" disabled={member.uid === activeMember?.uid} onClick={() => toggleMemberStatus(member)}>
-                              {member.status === "disabled" ? "Reactivate" : "Disable"}
-                            </button>
+                            <div className="team-member-actions">
+                              <button className="invite-cancel-btn" disabled={member.uid === activeMember?.uid} onClick={() => toggleMemberStatus(member)}>
+                                {member.status === "disabled" ? "Reactivate" : "Disable"}
+                              </button>
+                              {member.uid !== activeMember?.uid
+                                && member.status === "active"
+                                && member.role !== "owner"
+                                && member.role !== "external"
+                                && !outgoingOwnershipTransfer && (
+                                  <button className="btn-secondary team-transfer-btn" onClick={() => openOwnershipTransfer(member)}>
+                                    Transfer ownership
+                                  </button>
+                                )}
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -544,7 +670,7 @@ export function Team() {
                 <p>
                   {inviteMode === "pi"
                     ? `Create a PI invite link for ${activeLab?.name}.`
-                    : `Add an admin, researcher, viewer, or collaborator to ${activeLab?.name}.`}
+                    : `Add an admin, researcher, or viewer to ${activeLab?.name}.`}
                 </p>
               </div>
               <button type="button" className="modal-close" onClick={closeInviteModal}>
@@ -584,7 +710,7 @@ export function Team() {
               <label className="modal-field">
                 <span>Role</span>
                 <select value={inviteForm.role} onChange={(e) => updateInviteField("role", e.target.value)}>
-                  {INVITE_ROLE_OPTIONS.filter((option) => option.value !== "pi").map((option) => (
+                  {INVITE_ROLE_OPTIONS.filter((option) => option.value !== "pi" && (canInvitePrivileged || option.value !== "admin")).map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -612,8 +738,8 @@ export function Team() {
 
             <div className="team-invite-note">
               {inviteMode === "pi"
-                ? "This creates a pending PI invite link. The PI signs in with the invited email, then LabOS adds them as a PI and creates their PI group."
-                : "This creates a pending invite link. On Firebase Spark, use Email Invite or Copy Link to send it without Cloud Functions."}
+                ? "This creates a one-time PI invite. The PI must verify the invited email before LabOS adds them as a PI and creates their PI group."
+                : "This creates a one-time secure invite. Copy the generated email or link now; it is intentionally not stored after this step."}
             </div>
 
             <div className="experiment-modal-actions">
@@ -628,13 +754,56 @@ export function Team() {
         </div>
       )}
 
+      {ownershipTarget && (
+        <div className="modal-backdrop" onMouseDown={closeOwnershipTransfer}>
+          <form className="team-invite-modal" onSubmit={submitOwnershipTransfer} onMouseDown={(event) => event.stopPropagation()}>
+            <div className="experiment-modal-header">
+              <div>
+                <h2>Transfer Lab Ownership</h2>
+                <p>Request a two-person ownership handoff to {ownershipTarget.displayName}.</p>
+              </div>
+              <button type="button" className="modal-close" onClick={closeOwnershipTransfer} disabled={isOwnershipSubmitting}>
+                x
+              </button>
+            </div>
+
+            {ownershipError && <div className="team-error compact">{ownershipError}</div>}
+
+            <div className="team-invite-note">
+              {ownershipTarget.displayName} must separately accept while signed in. Until then, you remain the owner. After acceptance, you retain an active PI role so existing PI groups stay intact.
+            </div>
+
+            <label className="modal-field">
+              <span>Type {ownershipTarget.email} to confirm</span>
+              <input
+                type="email"
+                value={ownershipConfirmationEmail}
+                onChange={(event) => setOwnershipConfirmationEmail(event.target.value)}
+                placeholder={ownershipTarget.email}
+                autoComplete="off"
+                required
+              />
+            </label>
+
+            <div className="experiment-modal-actions">
+              <button type="button" className="btn-secondary" onClick={closeOwnershipTransfer} disabled={isOwnershipSubmitting}>
+                Cancel
+              </button>
+              <button className="btn-primary" type="submit" disabled={isOwnershipSubmitting || ownershipConfirmationEmail.trim().toLowerCase() !== ownershipTarget.email.toLowerCase()}>
+                {isOwnershipSubmitting ? "Requesting..." : "Request transfer"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {emailPreview && (
         <div className="modal-backdrop" onMouseDown={() => setEmailPreview(null)}>
           <div className="team-invite-modal" onMouseDown={(e) => e.stopPropagation()}>
             <div className="experiment-modal-header">
               <div>
                 <h2>Email Invite</h2>
-                <p>If your email app opened blank, use this copy as the source of truth.</p>
+                <p>Copy or send this one-time secure invite now. It is not retained in the pending-invite list.</p>
               </div>
               <button type="button" className="modal-close" onClick={() => setEmailPreview(null)}>
                 x
@@ -659,7 +828,7 @@ export function Team() {
             </label>
 
             <div className="team-invite-note">
-              The full email body was copied to your clipboard before opening the mail app.
+              The link is available only in this dialog. Copy it deliberately and send it only to the intended recipient.
             </div>
 
             <div className="experiment-modal-actions">
@@ -709,4 +878,11 @@ function inviteMetaFor(invite: LabInvite, members: LabMember[]) {
   if (invite.role === "researcher") return piNameFor(invite.piUid, members);
   if (invite.role === "pi") return "PI group on accept";
   return "Lab-wide";
+}
+
+function formatTransferExpiry(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "soon";
+  if (date.getTime() <= Date.now()) return "now";
+  return date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }

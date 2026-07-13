@@ -7,15 +7,17 @@ import {
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   type Firestore,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes, type FirebaseStorage } from "firebase/storage";
-import { db, storage } from "../lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { ref, uploadBytes, type FirebaseStorage } from "firebase/storage";
+import { db, functions, storage } from "../lib/firebase";
 import { getClientDeviceIdentity, type ClientDeviceIdentity } from "../lib/deviceIdentity";
 import { useAuth } from "./AuthContext";
+import type { LabMember } from "../data/accountTypes";
 import type {
   AIInsight,
   AuthoringBlock,
@@ -27,8 +29,8 @@ import type {
   CreateExperimentInput,
   Experiment,
   ExperimentDetail,
+  ExperimentIntegrityReport,
   ExperimentVersion,
-  HistoryEntry,
   IntegrationImport,
   InventoryItem,
   InventoryLot,
@@ -46,6 +48,7 @@ import type {
 } from "../data/types";
 
 interface LabDataState {
+  members: LabMember[];
   experiments: Experiment[];
   experimentDetails: Record<string, ExperimentDetail>;
   protocolTemplates: ProtocolTemplate[];
@@ -69,10 +72,11 @@ interface LabDataContextValue extends LabDataState {
   linkProtocolStepLot: (experimentId: string, stepId: string, lotId: string | null) => Promise<void>;
   addComment: (experimentId: string, body: string) => Promise<void>;
   uploadAttachment: (experimentId: string, file: File, protocolStepId?: string | null) => Promise<AttachmentRecord>;
-  submitExperimentForReview: (experimentId: string, comment?: string, reviewerUid?: string | null, reviewerName?: string | null, reviewDueDate?: string | null) => Promise<void>;
+  submitExperimentForReview: (experimentId: string, reviewerUid: string, comment?: string, reviewDueDate?: string | null) => Promise<void>;
   approveExperimentReview: (experimentId: string, comment?: string) => Promise<void>;
   rejectExperimentReview: (experimentId: string, comment: string) => Promise<void>;
   signExperiment: (experimentId: string, meaning: "author" | "reviewer" | "approver", comment: string) => Promise<void>;
+  verifyExperimentIntegrity: (experimentId: string) => Promise<ExperimentIntegrityReport>;
   createExperimentAmendment: (experimentId: string, reason: string) => Promise<Experiment>;
   updateProtocolStepDetails: (experimentId: string, stepId: string, input: Partial<Pick<ProtocolStep, "note" | "deviation" | "required" | "timerMinutes">>) => Promise<void>;
   saveAuthoringBlocks: (experimentId: string, blocks: AuthoringBlock[]) => Promise<void>;
@@ -103,19 +107,13 @@ function requireStorage(): FirebaseStorage {
   return storage;
 }
 
-function nowIso() {
-  return new Date().toISOString();
+function requireFunctions() {
+  if (!functions) throw new Error("Firebase Functions is not configured.");
+  return functions;
 }
 
-function displayDate(value: string) {
-  if (!value) return "Just now";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+function nowIso() {
+  return new Date().toISOString();
 }
 
 function shortTime(value = new Date()) {
@@ -126,9 +124,26 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
-function createShareToken() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+const ATTACHMENT_CONTENT_TYPES: Record<string, string> = {
+  pdf: "application/pdf",
+  zip: "application/zip",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  txt: "text/plain",
+  csv: "text/csv",
+  tsv: "text/tab-separated-values",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+};
+
+function attachmentContentType(file: File) {
+  const browserType = file.type.toLowerCase();
+  if (Object.values(ATTACHMENT_CONTENT_TYPES).includes(browserType)) return browserType;
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return ATTACHMENT_CONTENT_TYPES[extension] ?? null;
 }
 
 function normalizeTags(tags: string[]) {
@@ -190,7 +205,7 @@ function docFor(labId: string, name: string, id: string) {
   return doc(requireDb(), "labs", labId, name, id);
 }
 
-function createAudit(input: {
+function createAudit(_input: {
   labId: string;
   kind: AuditEvent["kind"];
   actor: string;
@@ -204,28 +219,10 @@ function createAudit(input: {
   fieldChanges?: AuditFieldChange[];
   versionNumber?: number;
 }) {
-  const id = createId("audit");
-  const timestampIso = nowIso();
-  const event: AuditEvent & { timestampServer: ReturnType<typeof serverTimestamp> } = {
-    id,
-    kind: input.kind,
-    actor: input.actor,
-    actorUid: input.actorUid,
-    action: input.action,
-    targetId: input.targetId,
-    targetLabel: input.targetLabel,
-    targetType: input.targetType ?? input.kind,
-    summary: input.summary,
-    timestamp: displayDate(timestampIso),
-    timestampIso,
-    timestampServer: serverTimestamp(),
-    deviceId: input.deviceIdentity.deviceId,
-    deviceLabel: input.deviceIdentity.deviceLabel,
-    sessionId: input.deviceIdentity.sessionId,
-    versionNumber: input.versionNumber ?? null,
-    fieldChanges: input.fieldChanges ?? [],
-  };
-  return setDoc(docFor(input.labId, "auditEvents", id), event);
+  // Auditing is deliberately server-owned. Keeping this compatibility helper
+  // preserves the existing call sites while the Firestore trigger records the
+  // authenticated mutation with a server timestamp.
+  return Promise.resolve();
 }
 
 function eventTime(event: AuditEvent) {
@@ -254,32 +251,22 @@ function normalizedDetail(detail: ExperimentDetail): ExperimentDetail {
     protocol: (detail.protocol ?? []).map((step) => ({ required: true, ...step })),
     reviewRequestedAt: detail.reviewRequestedAt ?? null,
     reviewRequestedBy: detail.reviewRequestedBy ?? null,
+    reviewRequestedByUid: detail.reviewRequestedByUid ?? null,
     reviewDecisionAt: detail.reviewDecisionAt ?? null,
     reviewDecisionBy: detail.reviewDecisionBy ?? null,
+    reviewDecisionByUid: detail.reviewDecisionByUid ?? null,
     reviewAssignedToUid: detail.reviewAssignedToUid ?? null,
     reviewAssignedToName: detail.reviewAssignedToName ?? null,
     reviewDueDate: detail.reviewDueDate ?? null,
     reviewComment: detail.reviewComment ?? null,
+    reviewEvents: detail.reviewEvents ?? [],
     lockedAt: detail.lockedAt ?? null,
     lockedBy: detail.lockedBy ?? null,
     dueDate: detail.dueDate ?? null,
   };
 }
 
-function createHistoryEntry(actor: string, actorUid: string, deviceIdentity: ClientDeviceIdentity, action: string, timestamp = nowIso()): HistoryEntry {
-  return {
-    id: createId("history"),
-    actor,
-    actorUid,
-    action,
-    timestamp: displayDate(timestamp),
-    timestampIso: timestamp,
-    deviceId: deviceIdentity.deviceId,
-    deviceLabel: deviceIdentity.deviceLabel,
-  };
-}
-
-function mockInsights(
+function readinessInsights(
   detail: Pick<
     ExperimentDetail,
     "protocol" | "status" | "objective" | "notes" | "observations" | "attachmentIds" | "reviewStatus" | "locked" | "authoringBlocks" | "versions" | "reviewDueDate"
@@ -339,7 +326,7 @@ function mockInsights(
       id: "ai-review",
       kind: detail.reviewStatus === "signed" || detail.locked ? "success" : detail.status === "review" ? "alert" : "suggestion",
       title: detail.reviewStatus === "signed" || detail.locked ? "Signed record locked" : detail.status === "review" ? "Ready for PI review" : "Review readiness",
-      body: "Mock AI check: objective, protocol run, notes, attachments, signatures, and comments are tracked for the report.",
+      body: "Deterministic check: objective, protocol run, notes, attachments, signatures, and comments are tracked for the report.",
     },
   ];
 }
@@ -384,9 +371,13 @@ function experimentChangePatch(
 ) {
   const revision = versionSnapshot(detail, actor, actorUid, deviceIdentity, action, fieldChanges, timestamp);
   return {
-    history: [...detail.history, createHistoryEntry(actor, actorUid, deviceIdentity, action, timestamp)],
-    versions: [...detail.versions, revision],
-    revisionNumber: revision.revisionNumber ?? (detail.revisionNumber ?? detail.versions.length) + 1,
+    // Client edits are intentionally not allowed to fabricate version or
+    // history evidence. The trusted backend appends canonical entries for
+    // signing, review, and attachment-finalization transitions; the server
+    // audit trigger records ordinary draft mutations.
+    history: detail.history,
+    versions: detail.versions,
+    revisionNumber: detail.revisionNumber,
     revision,
   };
 }
@@ -425,7 +416,12 @@ function defaultProtocol(experimentId: string): ProtocolStep[] {
 }
 
 function protocolFromTemplate(template: ProtocolTemplate): ProtocolStep[] {
-  return template.steps.map((label, index) => ({
+  const steps = template.steps.map((step) => step.trim()).filter(Boolean);
+  if (steps.length === 0) {
+    throw new Error(`Protocol template "${template.name}" has no usable steps. Update the template before using it in an experiment.`);
+  }
+
+  return steps.map((label, index) => ({
     id: `${template.id}-run-${index + 1}-${Date.now()}`,
     label,
     status: "pending",
@@ -445,6 +441,7 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
   const { activeLab, activeMember, user } = useAuth();
   const deviceIdentity = useMemo(() => getClientDeviceIdentity(), []);
   const [state, setState] = useState<LabDataState>({
+    members: [],
     experiments: [],
     experimentDetails: {},
     protocolTemplates: [],
@@ -476,13 +473,24 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           : error.message,
       }));
     };
+    const publicProjectsById = new Map<string, ProjectRecord>();
+    const accessibleProjectsById = new Map<string, ProjectRecord>();
+    const syncProjectRecords = () => {
+      const records = [...new Map([...publicProjectsById, ...accessibleProjectsById]).values()]
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+      setState((prev) => ({ ...prev, projectRecords: records }));
+    };
+
     const unsubscribers = [
+      onSnapshot(query(pathFor(activeLab.id, "members"), orderBy("displayName", "asc")), (snapshot) => {
+        setState((prev) => ({ ...prev, members: snapshot.docs.map((item) => item.data() as LabMember) }));
+      }, handleSnapshotError),
       onSnapshot(query(pathFor(activeLab.id, "experiments"), orderBy("modifiedAt", "desc")), (snapshot) => {
         const details = snapshot.docs.map((item) => normalizedDetail(item.data() as ExperimentDetail));
         setState((prev) => ({
           ...prev,
           experiments: details.map(detailToExperiment),
-          experimentDetails: Object.fromEntries(details.map((detail) => [detail.id, { ...detail, aiInsights: mockInsights(detail) }])),
+          experimentDetails: Object.fromEntries(details.map((detail) => [detail.id, { ...detail, aiInsights: readinessInsights(detail) }])),
           isLoading: false,
         }));
       }, handleSnapshotError),
@@ -498,11 +506,15 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
         setState((prev) => ({ ...prev, sampleRecords: records }));
       }, handleSnapshotError),
-      onSnapshot(pathFor(activeLab.id, "projectRecords"), (snapshot) => {
-        const records = snapshot.docs
-          .map((item) => item.data() as ProjectRecord)
-          .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-        setState((prev) => ({ ...prev, projectRecords: records }));
+      onSnapshot(query(pathFor(activeLab.id, "projectRecords"), where("visibility", "==", "lab")), (snapshot) => {
+        publicProjectsById.clear();
+        snapshot.docs.forEach((item) => publicProjectsById.set(item.id, item.data() as ProjectRecord));
+        syncProjectRecords();
+      }, handleSnapshotError),
+      onSnapshot(query(pathFor(activeLab.id, "projectRecords"), where("allowedMemberUids", "array-contains", activeMember?.uid ?? "")), (snapshot) => {
+        accessibleProjectsById.clear();
+        snapshot.docs.forEach((item) => accessibleProjectsById.set(item.id, item.data() as ProjectRecord));
+        syncProjectRecords();
       }, handleSnapshotError),
       onSnapshot(pathFor(activeLab.id, "notifications"), (snapshot) => {
         const records = snapshot.docs
@@ -532,7 +544,7 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
     ];
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, [activeLab]);
+  }, [activeLab, activeMember?.uid]);
 
   const actor = user?.name ?? "Unknown user";
   const actorUid = user?.uid ?? "";
@@ -541,12 +553,13 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<LabDataContextValue>(() => {
     const labId = activeLab?.id;
-    const createNotification = async (input: Omit<NotificationRecord, "id" | "createdAt" | "readBy">) => {
+    const createNotification = async (input: Omit<NotificationRecord, "id" | "createdAt" | "createdByUid" | "readBy">) => {
       if (!labId) return;
       const id = createId("notification");
       const record: NotificationRecord = {
         id,
         ...input,
+        createdByUid: actorUid,
         readBy: [],
         createdAt: nowIso(),
       };
@@ -604,12 +617,15 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           versions: [],
           reviewRequestedAt: null,
           reviewRequestedBy: null,
+          reviewRequestedByUid: null,
           reviewDecisionAt: null,
           reviewDecisionBy: null,
+          reviewDecisionByUid: null,
           reviewAssignedToUid: null,
           reviewAssignedToName: null,
           reviewDueDate: null,
           reviewComment: null,
+          reviewEvents: [],
           lockedAt: null,
           lockedBy: null,
           dueDate: input.dueDate || null,
@@ -622,10 +638,6 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           fieldChange("Tags", [], detail.tags),
           fieldChange("Protocol template", null, detail.protocolTemplateId ?? "Default protocol"),
         ].filter((change): change is AuditFieldChange => Boolean(change));
-        const revision = versionSnapshot(detail, actor, actorUid, deviceIdentity, "Created experiment", fieldChanges, timestamp);
-        detail.revisionNumber = revision.revisionNumber;
-        detail.history = [createHistoryEntry(actor, actorUid, deviceIdentity, "Created experiment", timestamp)];
-        detail.versions = [revision];
         await setDoc(docFor(labId, "experiments", id), detail);
         await createAudit({
           labId,
@@ -639,7 +651,7 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           targetType: "experiment",
           summary: `Created ${detail.name} in ${detail.project}.`,
           fieldChanges,
-          versionNumber: revision.revisionNumber,
+          versionNumber: detail.revisionNumber,
         });
         return detailToExperiment(detail);
       },
@@ -892,261 +904,90 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
         const detail = state.experimentDetails[experimentId];
         if (!detail) throw new Error("Experiment not found");
         if (detail.locked) throw new Error("Signed experiments are locked. Create an amendment before uploading files.");
+        if (!["none", "rejected", "amendment"].includes(detail.reviewStatus ?? "none")) {
+          throw new Error("Attachments cannot change while independent review is in progress. Request changes or create an amendment first.");
+        }
+        const contentType = attachmentContentType(file);
+        if (!contentType) {
+          throw new Error("Use a PDF, ZIP, Excel, text/CSV, PNG, JPEG, or TIFF attachment. Instrument-file support requires the secure ingestion workflow.");
+        }
+        if (file.size <= 0 || file.size >= 25 * 1024 * 1024) {
+          throw new Error("Attachments must be between 1 byte and 25 MB.");
+        }
         const id = createId("attachment");
-        const storagePath = `labs/${labId}/experiments/${experimentId}/${id}-${file.name}`;
+        const storagePath = `labs/${labId}/experiments/${experimentId}/${id}`;
         const fileRef = ref(requireStorage(), storagePath);
-        await uploadBytes(fileRef, file);
-        const downloadURL = await getDownloadURL(fileRef);
-        const timestamp = nowIso();
-        const record: AttachmentRecord = {
-          id,
+        await uploadBytes(fileRef, file, {
+          contentType,
+          customMetadata: {
+            labId,
+            experimentId,
+            attachmentId: id,
+            uploaderUid: actorUid,
+          },
+        });
+        const finalize = httpsCallable<
+          { labId: string; experimentId: string; attachmentId: string; fileName: string; protocolStepId: string | null },
+          { attachment: AttachmentRecord }
+        >(requireFunctions(), "finalizeAttachment");
+        const result = await finalize({
+          labId,
           experimentId,
-          protocolStepId,
+          attachmentId: id,
           fileName: file.name,
-          contentType: file.type || "application/octet-stream",
-          size: file.size,
-          storagePath,
-          downloadURL,
-          uploadedBy: actor,
-          uploadedByUid: actorUid,
-          uploadedAt: timestamp,
-        };
-        const fieldChanges = [
-          fieldChange("Attachment count", detail.attachmentIds.length, detail.attachmentIds.length + 1),
-          fieldChange("Attachment file", null, file.name),
-          fieldChange("Attachment size", null, `${file.size} bytes`),
-          fieldChange("Protocol step attachment", null, protocolStepId ?? "Experiment"),
-        ].filter((change): change is AuditFieldChange => Boolean(change));
-        const changePatch = experimentChangePatch(detail, actor, actorUid, deviceIdentity, "Uploaded attachment", fieldChanges, timestamp);
-        await setDoc(docFor(labId, "attachments", id), record);
-        await updateDoc(docFor(labId, "experiments", experimentId), {
-          attachmentIds: [...detail.attachmentIds, id],
-          history: changePatch.history,
-          versions: changePatch.versions,
-          revisionNumber: changePatch.revisionNumber,
-          modified: "Just now",
-          modifiedAt: timestamp,
+          protocolStepId,
         });
-        await createAudit({
-          labId,
-          actorUid,
-          deviceIdentity,
-          kind: "experiment",
-          actor,
-          action: "Uploaded attachment",
-          targetId: experimentId,
-          targetLabel: file.name,
-          targetType: "attachment",
-          summary: `Uploaded ${file.name}.`,
-          fieldChanges,
-          versionNumber: changePatch.revision.revisionNumber,
-        });
-        return record;
+        return result.data.attachment;
       },
-      submitExperimentForReview: async (experimentId, comment = "", reviewerUid = null, reviewerName = null, reviewDueDate = null) => {
+      submitExperimentForReview: async (experimentId, reviewerUid, comment = "", reviewDueDate = null) => {
         if (!labId) throw new Error("No active lab");
-        const detail = state.experimentDetails[experimentId];
-        if (!detail) return;
-        if (detail.locked) throw new Error("Signed experiments are already locked.");
-        const timestamp = nowIso();
-        const fieldChanges = [
-          fieldChange("Status", detail.status, "review"),
-          fieldChange("Review status", detail.reviewStatus, "requested"),
-          fieldChange("Review requested by", detail.reviewRequestedBy, actor),
-          fieldChange("Review note", detail.reviewComment, comment.trim() || null),
-          fieldChange("Assigned reviewer", detail.reviewAssignedToName, reviewerName),
-          fieldChange("Review due date", detail.reviewDueDate, reviewDueDate),
-        ].filter((change): change is AuditFieldChange => Boolean(change));
-        const changePatch = experimentChangePatch(detail, actor, actorUid, deviceIdentity, "Submitted for PI review", fieldChanges, timestamp);
-        await updateDoc(docFor(labId, "experiments", experimentId), {
-          status: "review",
-          reviewStatus: "requested",
-          reviewRequestedAt: timestamp,
-          reviewRequestedBy: actor,
-          reviewAssignedToUid: reviewerUid,
-          reviewAssignedToName: reviewerName,
-          reviewDueDate,
-          reviewComment: comment.trim() || null,
-          modified: "Just now",
-          modifiedAt: timestamp,
-          history: changePatch.history,
-          versions: changePatch.versions,
-          revisionNumber: changePatch.revisionNumber,
-        });
-        await createNotification({
-          kind: "review",
-          title: "Experiment ready for review",
-          body: reviewerName ? `${actor} assigned ${detail.name} to ${reviewerName} for review.` : `${actor} submitted ${detail.name} for PI review.`,
-          targetType: "experiment",
-          targetId: experimentId,
-          priority: "high",
-        });
-        await createAudit({
+        const requestReview = httpsCallable<
+          { labId: string; experimentId: string; reviewerUid: string; comment: string; reviewDueDate: string | null },
+          { experimentId: string; reviewStatus: "requested" }
+        >(requireFunctions(), "requestExperimentReview");
+        await requestReview({
           labId,
-          actorUid,
-          deviceIdentity,
-          kind: "experiment",
-          actor,
-          action: "Submitted for review",
-          targetId: experimentId,
-          targetLabel: detail.name,
-          targetType: "experiment",
-          summary: comment.trim() || "Requested PI review.",
-          fieldChanges,
-          versionNumber: changePatch.revision.revisionNumber,
+          experimentId,
+          reviewerUid,
+          comment: comment.trim(),
+          reviewDueDate,
         });
       },
       approveExperimentReview: async (experimentId, comment = "") => {
         if (!labId) throw new Error("No active lab");
-        const detail = state.experimentDetails[experimentId];
-        if (!detail) return;
-        const timestamp = nowIso();
-        const fieldChanges = [
-          fieldChange("Review status", detail.reviewStatus, "approved"),
-          fieldChange("Review decision by", detail.reviewDecisionBy, actor),
-          fieldChange("Review comment", detail.reviewComment, comment.trim() || "Approved for signature."),
-        ].filter((change): change is AuditFieldChange => Boolean(change));
-        const changePatch = experimentChangePatch(detail, actor, actorUid, deviceIdentity, "Approved review", fieldChanges, timestamp);
-        await updateDoc(docFor(labId, "experiments", experimentId), {
-          reviewStatus: "approved",
-          reviewDecisionAt: timestamp,
-          reviewDecisionBy: actor,
-          reviewComment: comment.trim() || "Approved for signature.",
-          modified: "Just now",
-          modifiedAt: timestamp,
-          history: changePatch.history,
-          versions: changePatch.versions,
-          revisionNumber: changePatch.revisionNumber,
-        });
-        await createNotification({
-          kind: "review",
-          title: "Review approved",
-          body: `${actor} approved ${detail.name}.`,
-          targetType: "experiment",
-          targetId: experimentId,
-          priority: "normal",
-        });
-        await createAudit({
-          labId,
-          actorUid,
-          deviceIdentity,
-          kind: "experiment",
-          actor,
-          action: "Approved review",
-          targetId: experimentId,
-          targetLabel: detail.name,
-          targetType: "experiment",
-          summary: comment.trim() || "Approved experiment review.",
-          fieldChanges,
-          versionNumber: changePatch.revision.revisionNumber,
-        });
+        const decideReview = httpsCallable<
+          { labId: string; experimentId: string; decision: "approved" | "rejected"; comment: string },
+          { experimentId: string; reviewStatus: "approved" | "rejected" }
+        >(requireFunctions(), "decideExperimentReview", { limitedUseAppCheckTokens: true });
+        await decideReview({ labId, experimentId, decision: "approved", comment: comment.trim() });
       },
       rejectExperimentReview: async (experimentId, comment) => {
         if (!labId) throw new Error("No active lab");
-        const detail = state.experimentDetails[experimentId];
-        if (!detail) return;
-        const timestamp = nowIso();
-        const fieldChanges = [
-          fieldChange("Status", detail.status, "active"),
-          fieldChange("Review status", detail.reviewStatus, "rejected"),
-          fieldChange("Review decision by", detail.reviewDecisionBy, actor),
-          fieldChange("Review comment", detail.reviewComment, comment.trim()),
-        ].filter((change): change is AuditFieldChange => Boolean(change));
-        const changePatch = experimentChangePatch(detail, actor, actorUid, deviceIdentity, "Rejected review", fieldChanges, timestamp);
-        await updateDoc(docFor(labId, "experiments", experimentId), {
-          status: "active",
-          reviewStatus: "rejected",
-          reviewDecisionAt: timestamp,
-          reviewDecisionBy: actor,
-          reviewComment: comment.trim(),
-          modified: "Just now",
-          modifiedAt: timestamp,
-          history: changePatch.history,
-          versions: changePatch.versions,
-          revisionNumber: changePatch.revisionNumber,
-        });
-        await createNotification({
-          kind: "review",
-          title: "Review changes requested",
-          body: `${actor} requested changes on ${detail.name}.`,
-          targetType: "experiment",
-          targetId: experimentId,
-          priority: "high",
-        });
-        await createAudit({
-          labId,
-          actorUid,
-          deviceIdentity,
-          kind: "experiment",
-          actor,
-          action: "Rejected review",
-          targetId: experimentId,
-          targetLabel: detail.name,
-          targetType: "experiment",
-          summary: comment.trim() || "Requested changes before signature.",
-          fieldChanges,
-          versionNumber: changePatch.revision.revisionNumber,
-        });
+        const decideReview = httpsCallable<
+          { labId: string; experimentId: string; decision: "approved" | "rejected"; comment: string },
+          { experimentId: string; reviewStatus: "approved" | "rejected" }
+        >(requireFunctions(), "decideExperimentReview", { limitedUseAppCheckTokens: true });
+        await decideReview({ labId, experimentId, decision: "rejected", comment: comment.trim() });
       },
       signExperiment: async (experimentId, meaning, comment) => {
         if (!labId) throw new Error("No active lab");
         const detail = state.experimentDetails[experimentId];
         if (!detail) return;
         if (detail.locked) throw new Error("Experiment is already signed and locked.");
-        const timestamp = nowIso();
-        const signature = {
-          id: createId("signature"),
-          signerUid: actorUid,
-          signerName: actor,
-          meaning,
-          comment: comment.trim(),
-          signedAt: timestamp,
-        };
-        const fieldChanges = [
-          fieldChange("Status", detail.status, "complete"),
-          fieldChange("Review status", detail.reviewStatus, "signed"),
-          fieldChange("Locked", detail.locked, true),
-          fieldChange("Locked by", detail.lockedBy, actor),
-          fieldChange("Signature count", detail.signatures.length, detail.signatures.length + 1),
-          fieldChange("Signature meaning", null, meaning),
-          fieldChange("Signature comment", null, comment.trim()),
-        ].filter((change): change is AuditFieldChange => Boolean(change));
-        const changePatch = experimentChangePatch(detail, actor, actorUid, deviceIdentity, "Electronically signed and locked", fieldChanges, timestamp);
-        await updateDoc(docFor(labId, "experiments", experimentId), {
-          status: "complete",
-          reviewStatus: "signed",
-          locked: true,
-          lockedAt: timestamp,
-          lockedBy: actor,
-          signatures: [...detail.signatures, signature],
-          versions: changePatch.versions,
-          revisionNumber: changePatch.revisionNumber,
-          modified: "Just now",
-          modifiedAt: timestamp,
-          history: changePatch.history,
-        });
-        await createNotification({
-          kind: "signature",
-          title: "Experiment signed",
-          body: `${detail.name} was signed and locked by ${actor}.`,
-          targetType: "experiment",
-          targetId: experimentId,
-          priority: "normal",
-        });
-        await createAudit({
-          labId,
-          actorUid,
-          deviceIdentity,
-          kind: "experiment",
-          actor,
-          action: "Signed experiment",
-          targetId: experimentId,
-          targetLabel: detail.name,
-          targetType: "experiment",
-          summary: `${actor} signed as ${meaning}. ${comment.trim()}`,
-          fieldChanges,
-          versionNumber: changePatch.revision.revisionNumber,
-        });
+        const sign = httpsCallable<
+          { labId: string; experimentId: string; meaning: "author" | "reviewer" | "approver"; comment: string },
+          { revisionNumber: number }
+        >(requireFunctions(), "signExperiment", { limitedUseAppCheckTokens: true });
+        await sign({ labId, experimentId, meaning, comment: comment.trim() });
+      },
+      verifyExperimentIntegrity: async (experimentId) => {
+        if (!labId) throw new Error("No active lab");
+        const verify = httpsCallable<
+          { labId: string; experimentId: string },
+          ExperimentIntegrityReport
+        >(requireFunctions(), "verifyExperimentIntegrity");
+        const result = await verify({ labId, experimentId });
+        return result.data;
       },
       createExperimentAmendment: async (experimentId, reason) => {
         if (!labId) throw new Error("No active lab");
@@ -1155,8 +996,21 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
         const id = createId("EXP");
         const timestamp = nowIso();
         const nextVersion = (detail.versionNumber ?? 1) + 1;
+        // Signed records can contain server-only provenance fields. An amendment
+        // starts a distinct client-creatable record, so never carry those
+        // privileged fields across from the immutable source document.
+        const {
+          lockedByUid: _lockedByUid,
+          lockedAtServer: _lockedAtServer,
+          modifiedAtServer: _modifiedAtServer,
+          ...amendmentSource
+        } = detail as ExperimentDetail & {
+          lockedByUid?: unknown;
+          lockedAtServer?: unknown;
+          modifiedAtServer?: unknown;
+        };
         const amendment: ExperimentDetail = {
-          ...detail,
+          ...amendmentSource,
           id,
           name: `${detail.name} Amendment v${nextVersion}`,
           status: "draft",
@@ -1171,15 +1025,19 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           reviewStatus: "amendment",
           reviewRequestedAt: null,
           reviewRequestedBy: null,
+          reviewRequestedByUid: null,
           reviewDecisionAt: null,
           reviewDecisionBy: null,
+          reviewDecisionByUid: null,
           reviewAssignedToUid: null,
           reviewAssignedToName: null,
           reviewDueDate: null,
           reviewComment: reason.trim(),
+          reviewEvents: [],
           signatures: [],
-          versions: [...detail.versions],
+          versions: [],
           versionNumber: nextVersion,
+          revisionNumber: 0,
           parentExperimentId: detail.id,
           comments: [],
           history: [],
@@ -1191,10 +1049,6 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           fieldChange("Review status", detail.reviewStatus, "amendment"),
           fieldChange("Amendment reason", null, reason.trim()),
         ].filter((change): change is AuditFieldChange => Boolean(change));
-        const revision = versionSnapshot(amendment, actor, actorUid, deviceIdentity, `Created amendment v${nextVersion}`, fieldChanges, timestamp);
-        amendment.revisionNumber = revision.revisionNumber;
-        amendment.versions = [...amendment.versions, revision];
-        amendment.history = [createHistoryEntry(actor, actorUid, deviceIdentity, "Created amendment", timestamp)];
         await setDoc(docFor(labId, "experiments", id), amendment);
         await createAudit({
           labId,
@@ -1208,7 +1062,7 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           targetType: "experiment",
           summary: reason.trim() || `Created amendment from ${detail.id}.`,
           fieldChanges,
-          versionNumber: revision.revisionNumber,
+          versionNumber: amendment.revisionNumber,
         });
         return detailToExperiment(amendment);
       },
@@ -1294,13 +1148,17 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
         const id = input.id || createId("protocol");
         const existing = state.protocolTemplates.find((item) => item.id === id);
         const timestamp = nowIso();
+        const steps = input.steps.map((step) => step.trim()).filter(Boolean);
+        if (steps.length === 0) {
+          throw new Error("A protocol template needs at least one non-empty step.");
+        }
         const template: ProtocolTemplate = {
           id,
           name: input.name.trim(),
           description: input.description.trim(),
           version: input.version ?? (existing ? existing.version + 1 : 1),
           status: input.status,
-          steps: input.steps.map((step) => step.trim()).filter(Boolean),
+          steps,
           createdBy: existing?.createdBy || actor,
           createdByUid: existing?.createdByUid || actorUid,
           createdAt: existing?.createdAt || timestamp,
@@ -1474,16 +1332,7 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           description: input.description.trim(),
           status: input.status,
           visibility: input.visibility ?? existing?.visibility ?? "lab",
-          allowedMemberUids: input.allowedMemberUids ?? existing?.allowedMemberUids ?? [],
-          readOnlyShareEnabled: input.readOnlyShareEnabled ?? existing?.readOnlyShareEnabled ?? false,
-          shareToken:
-            input.readOnlyShareEnabled ?? existing?.readOnlyShareEnabled
-              ? existing?.shareToken ?? createShareToken()
-              : null,
-          shareCreatedAt:
-            input.readOnlyShareEnabled ?? existing?.readOnlyShareEnabled
-              ? existing?.shareCreatedAt ?? timestamp
-              : null,
+          allowedMemberUids: Array.from(new Set([actorUid, ...(input.allowedMemberUids ?? existing?.allowedMemberUids ?? [])])),
           ownerUid: existing?.ownerUid || actorUid,
           ownerName: existing?.ownerName || actor,
           notebooks: input.notebooks.map((item) => item.trim()).filter(Boolean),
@@ -1498,7 +1347,6 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           { key: "status", label: "Status" },
           { key: "visibility", label: "Visibility" },
           { key: "allowedMemberUids", label: "Project members" },
-          { key: "readOnlyShareEnabled", label: "Read-only share" },
           { key: "notebooks", label: "Notebooks" },
           { key: "folders", label: "Folders" },
           { key: "tags", label: "Tags" },
@@ -1626,6 +1474,7 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           mapping: input.mapping ?? {},
           validationIssues: input.validationIssues ?? [],
           createdBy: actor,
+          createdByUid: actorUid,
           createdAt: nowIso(),
         };
         const fieldChanges = [
