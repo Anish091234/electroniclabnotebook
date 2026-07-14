@@ -118,7 +118,12 @@ describe("Cloud Storage attachment authorization", () => {
 
     await assertSucceeds(uploadBytes(file, new Uint8Array([1, 2, 3]), uploadMetadata("researcher")));
     await seedFinalizedAttachment();
-    await assertSucceeds(getMetadata(file));
+    // Storage Rules evaluates the trusted Firestore marker through a separate
+    // emulator service. Give that cross-service view a moment to observe the
+    // server-written marker, then use a fresh SDK context for the new read.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const finalizedStorage = testEnv.authenticatedContext("researcher").storage(BUCKET_URL);
+    await assertSucceeds(getMetadata(ref(finalizedStorage, attachmentPath())));
   });
 
   it("requires canonical metadata and an editable authorized experiment to upload", async () => {
