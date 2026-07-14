@@ -111,7 +111,10 @@ describe("Cloud Storage attachment authorization", () => {
     await assertFails(getMetadata(file));
 
     await seedFinalizedAttachment();
-    await assertSucceeds(getMetadata(file));
+    // Use a new SDK context after trusted finalization so the assertion checks
+    // a fresh Storage Rules evaluation rather than a prior denied request.
+    const finalizedStorage = testEnv.authenticatedContext("researcher").storage(BUCKET_URL);
+    await assertSucceeds(getMetadata(ref(finalizedStorage, attachmentPath())));
   });
 
   it("requires canonical metadata and an editable authorized experiment to upload", async () => {
