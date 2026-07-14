@@ -7,11 +7,12 @@ service firebase.storage {
     }
 
     function isLabMember(labId) {
+      let member = firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid));
       return signedIn()
-        && firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.status == "active"
+        && member.data.status == "active"
         // "external" has no Storage access until a scoped-share feature is
         // designed and enforced across Firestore and Storage.
-        && firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role
+        && member.data.role
           in ["owner", "admin", "pi", "researcher", "viewer"];
     }
 
@@ -62,10 +63,11 @@ service firebase.storage {
     }
 
     function hasFinalizedAttachmentRecord(labId, experimentId, attachmentId) {
-      return firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.experimentId == experimentId
-        && firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.storagePath
+      let attachment = firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId));
+      return attachment.data.experimentId == experimentId
+        && attachment.data.storagePath
           == "labs/" + labId + "/experiments/" + experimentId + "/" + attachmentId
-        && firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.state == "finalized";
+        && attachment.data.state == "finalized";
     }
 
     match /labs/{labId}/experiments/{experimentId}/{fileName} {
