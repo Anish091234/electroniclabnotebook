@@ -102,22 +102,23 @@ afterAll(async () => {
 });
 
 describe("Cloud Storage attachment authorization", () => {
-  it("keeps an uploaded object unreadable until trusted finalization records it", async () => {
+  it("keeps an uploaded object unreadable before trusted finalization", async () => {
     await seedLab([{ uid: "researcher", role: "researcher" }]);
     const storage = testEnv.authenticatedContext("researcher").storage(BUCKET_URL);
     const file = ref(storage, attachmentPath());
 
     await assertSucceeds(uploadBytes(file, new Uint8Array([1, 2, 3]), uploadMetadata("researcher")));
     await assertFails(getMetadata(file));
+  });
 
+  it("allows evidence bytes after trusted finalization records matching metadata", async () => {
+    await seedLab([{ uid: "researcher", role: "researcher" }]);
+    const storage = testEnv.authenticatedContext("researcher").storage(BUCKET_URL);
+    const file = ref(storage, attachmentPath());
+
+    await assertSucceeds(uploadBytes(file, new Uint8Array([1, 2, 3]), uploadMetadata("researcher")));
     await seedFinalizedAttachment();
-    // The Storage emulator evaluates cross-service reads asynchronously after
-    // a Firestore write; wait for that observed state before the fresh read.
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    // Use a new SDK context after trusted finalization so the assertion checks
-    // a fresh Storage Rules evaluation rather than a prior denied request.
-    const finalizedStorage = testEnv.authenticatedContext("researcher").storage(BUCKET_URL);
-    await assertSucceeds(getMetadata(ref(finalizedStorage, attachmentPath())));
+    await assertSucceeds(getMetadata(file));
   });
 
   it("requires canonical metadata and an editable authorized experiment to upload", async () => {
