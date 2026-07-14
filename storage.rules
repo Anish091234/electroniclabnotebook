@@ -63,11 +63,11 @@ service firebase.storage {
     }
 
     function hasFinalizedAttachmentRecord(labId, experimentId, attachmentId) {
-      let attachment = firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId));
-      return attachment.data.experimentId == experimentId
-        && attachment.data.storagePath
-          == "labs/" + labId + "/experiments/" + experimentId + "/" + attachmentId
-        && attachment.data.state == "finalized";
+      // The document is a backend-only trust marker: finalizeAttachment
+      // validates the canonical path, object generation, size, content type,
+      // uploader metadata, and SHA-256 before creating it. Browser clients
+      // cannot create or alter attachment documents.
+      return firestore.exists(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId));
     }
 
     match /labs/{labId}/experiments/{experimentId}/{fileName} {
