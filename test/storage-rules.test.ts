@@ -70,12 +70,12 @@ async function seedLab(members: Array<{ uid: string; role: string }>) {
   });
 }
 
-async function seedFinalizedAttachment() {
+async function seedFinalizedAttachment(attachmentId: string) {
   await testEnv.withSecurityRulesDisabled(async (context) => {
-    await setDoc(doc(context.firestore(), "labs", LAB_ID, "attachments", ATTACHMENT_ID), {
-      id: ATTACHMENT_ID,
+    await setDoc(doc(context.firestore(), "labs", LAB_ID, "attachments", attachmentId), {
+      id: attachmentId,
       experimentId: EXPERIMENT_ID,
-      storagePath: attachmentPath(),
+      storagePath: attachmentPath(attachmentId),
       state: "finalized",
     });
   });
@@ -113,17 +113,18 @@ describe("Cloud Storage attachment authorization", () => {
 
   it("allows evidence bytes after trusted finalization records matching metadata", async () => {
     await seedLab([{ uid: "researcher", role: "researcher" }]);
+    const finalizedAttachmentId = "attachment-finalized-001";
     const storage = testEnv.authenticatedContext("researcher").storage(BUCKET_URL);
-    const file = ref(storage, attachmentPath());
+    const file = ref(storage, attachmentPath(finalizedAttachmentId));
 
-    await assertSucceeds(uploadBytes(file, new Uint8Array([1, 2, 3]), uploadMetadata("researcher")));
-    await seedFinalizedAttachment();
+    await assertSucceeds(uploadBytes(file, new Uint8Array([1, 2, 3]), uploadMetadata("researcher", finalizedAttachmentId)));
+    await seedFinalizedAttachment(finalizedAttachmentId);
     // Storage Rules evaluates the trusted Firestore marker through a separate
     // emulator service. Give that cross-service view a moment to observe the
     // server-written marker, then use a fresh SDK context for the new read.
     await new Promise((resolve) => setTimeout(resolve, 250));
     const finalizedStorage = testEnv.authenticatedContext("researcher").storage(BUCKET_URL);
-    await assertSucceeds(getMetadata(ref(finalizedStorage, attachmentPath())));
+    await assertSucceeds(getMetadata(ref(finalizedStorage, attachmentPath(finalizedAttachmentId))));
   });
 
   it("requires canonical metadata and an editable authorized experiment to upload", async () => {
@@ -148,11 +149,12 @@ describe("Cloud Storage attachment authorization", () => {
 
   it("makes evidence bytes append-only after a permitted upload", async () => {
     await seedLab([{ uid: "researcher", role: "researcher" }]);
+    const appendOnlyAttachmentId = "attachment-append-only-001";
     const storage = testEnv.authenticatedContext("researcher").storage(BUCKET_URL);
-    const file = ref(storage, attachmentPath());
+    const file = ref(storage, attachmentPath(appendOnlyAttachmentId));
 
-    await assertSucceeds(uploadBytes(file, new Uint8Array([1, 2, 3]), uploadMetadata("researcher")));
-    await assertFails(uploadBytes(file, new Uint8Array([4, 5, 6]), uploadMetadata("researcher")));
+    await assertSucceeds(uploadBytes(file, new Uint8Array([1, 2, 3]), uploadMetadata("researcher", appendOnlyAttachmentId)));
+    await assertFails(uploadBytes(file, new Uint8Array([4, 5, 6]), uploadMetadata("researcher", appendOnlyAttachmentId)));
     await assertFails(deleteObject(file));
   });
 });
