@@ -111,6 +111,9 @@ describe("Cloud Storage attachment authorization", () => {
     await assertFails(getMetadata(file));
 
     await seedFinalizedAttachment();
+    // The Storage emulator evaluates cross-service reads asynchronously after
+    // a Firestore write; wait for that observed state before the fresh read.
+    await new Promise((resolve) => setTimeout(resolve, 250));
     // Use a new SDK context after trusted finalization so the assertion checks
     // a fresh Storage Rules evaluation rather than a prior denied request.
     const finalizedStorage = testEnv.authenticatedContext("researcher").storage(BUCKET_URL);
