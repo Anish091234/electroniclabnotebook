@@ -8,7 +8,6 @@ service firebase.storage {
 
     function isLabMember(labId) {
       return signedIn()
-        && firestore.exists(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid))
         && firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.status == "active"
         // "external" has no Storage access until a scoped-share feature is
         // designed and enforced across Firestore and Storage.
@@ -18,10 +17,6 @@ service firebase.storage {
 
     function memberRole(labId) {
       return firestore.get(/databases/(default)/documents/labs/$(labId)/members/$(request.auth.uid)).data.role;
-    }
-
-    function experimentExists(labId, experimentId) {
-      return firestore.exists(/databases/(default)/documents/labs/$(labId)/experiments/$(experimentId));
     }
 
     function experimentAcceptsAttachments(labId, experimentId) {
@@ -34,7 +29,6 @@ service firebase.storage {
 
     function canEditExperimentAttachment(labId, experimentId) {
       return isLabMember(labId)
-        && experimentExists(labId, experimentId)
         && experimentAcceptsAttachments(labId, experimentId)
         && (
           memberRole(labId) in ["owner", "admin"]
@@ -68,8 +62,7 @@ service firebase.storage {
     }
 
     function hasFinalizedAttachmentRecord(labId, experimentId, attachmentId) {
-      return firestore.exists(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId))
-        && firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.experimentId == experimentId
+      return firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.experimentId == experimentId
         && firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.storagePath
           == "labs/" + labId + "/experiments/" + experimentId + "/" + attachmentId
         && firestore.get(/databases/(default)/documents/labs/$(labId)/attachments/$(attachmentId)).data.state == "finalized";
