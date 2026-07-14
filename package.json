@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test:rules:types": "tsc -p tsconfig.rules-test.json --noEmit",
-    "test:rules:raw": "vitest run test",
+    "test:rules:raw": "vitest run test --no-file-parallelism",
     "test:rules": "npx firebase-tools@15.23.0 emulators:exec --only firestore,storage --project labos-security-test \"npm run test:rules:raw\"",
     "verify": "npm run lint && npm run build && npm run test:rules:types && npm run test:rules",
     "preview": "vite preview",
