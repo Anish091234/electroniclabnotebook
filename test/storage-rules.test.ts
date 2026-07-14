@@ -9,7 +9,9 @@ import {
 import { deleteObject, getMetadata, ref, uploadBytes } from "firebase/storage";
 import { doc, setDoc } from "firebase/firestore";
 
-const PROJECT_ID = "labos-storage-test";
+// Keep Storage and Firestore on the same emulator project because these
+// Storage Rules authorize requests with Firestore membership/attachment reads.
+const PROJECT_ID = "labos-security-test";
 const LAB_ID = "lab-alpha";
 const EXPERIMENT_ID = "EXP-1";
 const ATTACHMENT_ID = "attachment-evidence-001";
