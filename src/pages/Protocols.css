@@ -35,6 +35,255 @@
   gap: 10px;
 }
 
+.protocol-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.protocol-import-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 7px;
+  background: var(--color-bg-subtle);
+}
+
+.protocol-import-panel strong,
+.protocol-import-panel span {
+  display: block;
+}
+
+.protocol-import-panel strong {
+  color: var(--color-text-primary);
+  font: 700 12px system-ui, sans-serif;
+}
+
+.protocol-import-panel span,
+.protocol-import-success {
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  font: 400 11px/1.45 system-ui, sans-serif;
+}
+
+.modal-field > span em {
+  margin-left: 5px;
+  color: var(--color-text-muted);
+  font: 500 10.5px system-ui, sans-serif;
+}
+
+.protocol-step-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 590px;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-bg-subtle);
+}
+
+.protocol-section-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 2px;
+  padding: 8px 9px 7px;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.protocol-section-row span {
+  flex: 0 0 auto;
+  color: var(--color-accent, #2563eb);
+  font: 700 10px system-ui, sans-serif;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.protocol-section-row input {
+  min-width: 0;
+  flex: 1;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: 700 14px/1.35 system-ui, sans-serif;
+}
+
+.protocol-section-row input:focus {
+  border-bottom-color: var(--color-accent, #2563eb);
+}
+
+.protocol-step-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-bg-surface);
+}
+
+.protocol-step-row-number {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-accent, #2563eb);
+  color: #fff;
+  font: 700 10px system-ui, sans-serif;
+}
+
+.protocol-step-row textarea {
+  min-height: 38px;
+  resize: vertical;
+  padding: 1px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: 400 12px/1.55 system-ui, sans-serif;
+}
+
+.protocol-step-row textarea:focus {
+  box-shadow: 0 2px 0 var(--color-accent, #2563eb);
+}
+
+.protocol-add-step {
+  align-self: flex-start;
+  margin-top: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent, #2563eb);
+  cursor: pointer;
+  font: 700 11.5px system-ui, sans-serif;
+}
+
+.sop-workspace {
+  grid-template-columns: minmax(520px, 1.35fr) minmax(280px, .65fr);
+}
+
+.sop-document-card { gap: 14px; }
+
+.sop-editor-heading,
+.sop-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sop-editor-heading p {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font: 400 12px/1.4 system-ui, sans-serif;
+}
+
+.sop-lock-badge {
+  padding: 4px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font: 700 10px system-ui, sans-serif;
+  text-transform: uppercase;
+}
+
+.sop-lock-badge.locked { color: #9a4d00; background: #fff4dd; border-color: #e5c58f; }
+
+.sop-actions-bar { justify-content: flex-start; flex-wrap: wrap; }
+
+.sop-editor-shell {
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-bg-subtle);
+}
+
+.sop-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 7px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+}
+
+.sop-toolbar button {
+  min-width: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font: 600 11px system-ui, sans-serif;
+}
+
+.sop-toolbar button:disabled { cursor: not-allowed; opacity: .5; }
+
+.sop-rich-editor {
+  min-height: 560px;
+  padding: 42px clamp(26px, 7vw, 76px);
+  overflow: auto;
+  outline: 0;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font: 400 14px/1.7 Georgia, "Times New Roman", serif;
+}
+
+.sop-rich-editor:focus { box-shadow: inset 0 0 0 2px var(--color-accent, #2563eb); }
+.sop-rich-editor h1 { margin: 0 0 24px; color: var(--color-text-primary); font: 700 28px/1.2 system-ui, sans-serif; }
+.sop-rich-editor h2 { margin: 30px 0 11px; color: var(--color-text-primary); font: 700 19px/1.3 system-ui, sans-serif; }
+.sop-rich-editor h3 { margin: 22px 0 8px; font: 700 15px/1.35 system-ui, sans-serif; }
+.sop-rich-editor p { margin: 0 0 14px; }
+.sop-rich-editor ul, .sop-rich-editor ol { margin: 0 0 16px; padding-left: 26px; }
+.sop-rich-editor li { margin: 6px 0; padding-left: 4px; }
+
+.sop-locked-note {
+  padding: 8px 12px;
+  background: #fff4dd;
+  color: #744400;
+  font: 600 11px system-ui, sans-serif;
+}
+
+.sop-editor-shell.locked .sop-rich-editor { background: color-mix(in srgb, var(--color-bg-subtle) 55%, var(--color-bg-surface)); }
+
+.sop-card { align-items: start; }
+.sop-card-preview {
+  max-height: 250px;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font: 400 12px/1.55 Georgia, "Times New Roman", serif;
+}
+.sop-card-preview h1, .sop-card-preview h2, .sop-card-preview h3 { color: var(--color-text-primary); font-family: system-ui, sans-serif; }
+.sop-card-preview h1 { font-size: 17px; }.sop-card-preview h2 { font-size: 14px; }.sop-card-preview h3 { font-size: 12px; }
+.sop-card-preview p, .sop-card-preview ul, .sop-card-preview ol { margin: 0 0 8px; }
+
+@media (max-width: 980px) {
+  .sop-workspace { grid-template-columns: 1fr; }
+  .sop-rich-editor { min-height: 420px; padding: 28px 22px; }
+}
+
+.protocol-import-success {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-success, #2e8b57) 12%, var(--color-bg-surface));
+  color: var(--color-text-primary);
+}
+
 .modal-field select {
   border: 1px solid var(--color-border);
   border-radius: 6px;

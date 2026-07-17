@@ -257,6 +257,8 @@ export interface ProtocolTemplate {
   version: number;
   status: ProtocolTemplateStatus;
   steps: string[];
+  documentHtml?: string;
+  locked?: boolean;
   createdBy: string;
   createdByUid?: string;
   createdAt: string;
@@ -313,6 +315,8 @@ export interface SaveProtocolTemplateInput {
   version?: number;
   status: ProtocolTemplateStatus;
   steps: string[];
+  documentHtml?: string;
+  locked?: boolean;
 }
 
 export interface SaveInventoryItemInput {

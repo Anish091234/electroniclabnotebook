@@ -1181,6 +1181,8 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           version: input.version ?? (existing ? existing.version + 1 : 1),
           status: input.status,
           steps,
+          documentHtml: input.documentHtml ?? existing?.documentHtml,
+          locked: input.locked ?? existing?.locked ?? false,
           createdBy: existing?.createdBy || actor,
           createdByUid: existing?.createdByUid || actorUid,
           createdAt: existing?.createdAt || timestamp,
