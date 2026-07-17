@@ -98,6 +98,35 @@ service cloud.firestore {
         || (canEditLabRecords(labId) && ownsExperiment(data));
     }
 
+    function noteEditCreateIsSafe(labId, experimentId, editId) {
+      return exists(/databases/$(database)/documents/labs/$(labId)/experiments/$(experimentId))
+        && canEditExperiment(
+          labId,
+          get(/databases/$(database)/documents/labs/$(labId)/experiments/$(experimentId)).data
+        )
+        && get(/databases/$(database)/documents/labs/$(labId)/experiments/$(experimentId)).data.locked == false
+        && get(/databases/$(database)/documents/labs/$(labId)/experiments/$(experimentId)).data.reviewStatus
+          in ["none", "rejected", "amendment"]
+        && request.resource.data.keys().hasOnly([
+          "id", "experimentId", "kind", "position", "addedText", "deletedText", "occurredAt",
+          "actorUid", "actorName", "deviceId", "deviceLabel", "sessionId"
+        ])
+        && request.resource.data.id == editId
+        && request.resource.data.experimentId == experimentId
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorName
+          == get(/databases/$(database)/documents/labs/$(labId)/members/$(request.auth.uid)).data.displayName
+        && request.resource.data.kind in ["insert", "delete", "replace"]
+        && request.resource.data.position is int && request.resource.data.position >= 0
+        && request.resource.data.addedText is string && request.resource.data.addedText.size() <= 100000
+        && request.resource.data.deletedText is string && request.resource.data.deletedText.size() <= 100000
+        && (request.resource.data.addedText.size() > 0 || request.resource.data.deletedText.size() > 0)
+        && request.resource.data.occurredAt is string && request.resource.data.occurredAt.size() <= 64
+        && request.resource.data.deviceId is string && request.resource.data.deviceId.size() > 0 && request.resource.data.deviceId.size() <= 160
+        && request.resource.data.deviceLabel is string && request.resource.data.deviceLabel.size() <= 200
+        && request.resource.data.sessionId is string && request.resource.data.sessionId.size() > 0 && request.resource.data.sessionId.size() <= 160;
+    }
+
     // These fields establish record ownership and signed-record identity. They
     // must never be changed as part of a normal edit, even by a lab admin.
     function controlFieldIsStable(field, defaultValue) {
@@ -408,6 +437,12 @@ service cloud.firestore {
             && clientExperimentChangesAreAllowed()
             && clientExperimentContentShapeIsSafe());
         allow delete: if false;
+
+        match /noteEdits/{editId} {
+          allow read: if isLabMember(labId);
+          allow create: if noteEditCreateIsSafe(labId, experimentId, editId);
+          allow update, delete: if false;
+        }
       }
 
       match /protocolTemplates/{templateId} {

@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ExperimentEditor.css";
 import { StatusBadge } from "../components/StatusBadge";
 import { CheckIcon } from "../components/icons";
 import { SecureAttachmentDownloadButton, SecureAttachmentImage } from "../components/SecureAttachment";
-import type { AuthoringBlock, AuthoringBlockKind, ExperimentStatus, ProtocolStepStatus } from "../data/types";
+import type { AuthoringBlock, AuthoringBlockKind, ExperimentStatus, NoteEditEvent, ProtocolStepStatus } from "../data/types";
 import { useLabData } from "../contexts/LabDataContext";
 import { useAuth } from "../contexts/AuthContext";
 import { AUTHORING_TEMPLATES, parseChecklist, parseDelimitedRows, parseKeyValueRows } from "../lib/authoringBlocks";
+import { getClientDeviceIdentity } from "../lib/deviceIdentity";
 
-type PanelTab = "ai" | "comments" | "history" | "files" | "review" | "tasks";
+type PanelTab = "details" | "protocol" | "blocks" | "ai" | "comments" | "history" | "files" | "review" | "tasks";
 type SaveState = "idle" | "saving" | "saved";
 
 const STATUS_OPTIONS: { value: ExperimentStatus; label: string }[] = [
@@ -36,6 +37,8 @@ const NOTE_SNIPPETS = [
   },
 ];
 
+const NOTE_EDIT_QUEUE_PREFIX = "labos.noteEdits.pending.";
+
 export function ExperimentEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -49,6 +52,8 @@ export function ExperimentEditor() {
     attachments,
     collaborationTasks,
     saveExperiment,
+    recordNoteEdit,
+    subscribeNoteEdits,
     attachProtocolTemplate,
     updateProtocolStepStatus,
     linkProtocolStepLot,
@@ -65,11 +70,11 @@ export function ExperimentEditor() {
   const detail = id ? experimentDetails[id] : undefined;
   const experimentAttachments = attachments.filter((item) => item.experimentId === id);
 
-  const [panelTab, setPanelTab] = useState<PanelTab>("ai");
+  const [panelTab, setPanelTab] = useState<PanelTab>("details");
+  const [panelOpen, setPanelOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [objective, setObjective] = useState("");
   const [notes, setNotes] = useState("");
-  const [observations, setObservations] = useState("");
   const [status, setStatus] = useState<ExperimentStatus>("draft");
   const [projectId, setProjectId] = useState("");
   const [notebook, setNotebook] = useState("");
@@ -93,7 +98,42 @@ export function ExperimentEditor() {
   const [blockRequired, setBlockRequired] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [saveError, setSaveError] = useState("");
+  const [draftRevision, setDraftRevision] = useState(0);
+  const [savedRevision, setSavedRevision] = useState(0);
   const [uploadState, setUploadState] = useState("");
+  const [noteEditEvents, setNoteEditEvents] = useState<NoteEditEvent[]>([]);
+  const [noteEditError, setNoteEditError] = useState("");
+  const [pendingNoteEditCount, setPendingNoteEditCount] = useState(0);
+  const deviceIdentity = useMemo(() => getClientDeviceIdentity(), []);
+  const isSyncingNoteEdits = useRef(false);
+
+  const flushPendingNoteEdits = useCallback(async (experimentId: string) => {
+    if (isSyncingNoteEdits.current) return;
+    isSyncingNoteEdits.current = true;
+    try {
+      while (true) {
+        const pending = readPendingNoteEdits(experimentId);
+        setPendingNoteEditCount(pending.length);
+        const next = pending[0];
+        if (!next) {
+          setNoteEditError("");
+          return;
+        }
+        try {
+          await recordNoteEdit(experimentId, next);
+          const remaining = readPendingNoteEdits(experimentId).filter((event) => event.id !== next.id);
+          writePendingNoteEdits(experimentId, remaining);
+          setPendingNoteEditCount(remaining.length);
+        } catch (error) {
+          setNoteEditError(error instanceof Error ? error.message : "This edit is waiting to sync.");
+          return;
+        }
+      }
+    } finally {
+      isSyncingNoteEdits.current = false;
+    }
+  }, [recordNoteEdit]);
 
   const lots = useMemo(
     () =>
@@ -110,8 +150,10 @@ export function ExperimentEditor() {
     if (!detail) return;
     setTitle(detail.name);
     setObjective(detail.objective);
-    setNotes(detail.notes || "");
-    setObservations(detail.observations || "");
+    setNotes([
+      detail.notes?.trim(),
+      detail.observations?.trim() ? `Observations & interpretation\n${detail.observations.trim()}` : "",
+    ].filter(Boolean).join("\n\n"));
     setStatus(detail.status);
     setProjectId(detail.projectId ?? "");
     setNotebook(detail.notebook ?? "General Notebook");
@@ -131,15 +173,84 @@ export function ExperimentEditor() {
     setBlockContent("");
     setBlockRequired(false);
     setSaveState("idle");
+    setSaveError("");
+    setDraftRevision(0);
+    setSavedRevision(0);
   }, [detail]);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    setNoteEditEvents([]);
+    setNoteEditError("");
+    return subscribeNoteEdits(
+      id,
+      (events) => {
+        setNoteEditEvents((current) => {
+          const merged = new Map(current.map((event) => [event.id, event]));
+          events.forEach((event) => merged.set(event.id, event));
+          return [...merged.values()].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+        });
+      },
+      (error) => {
+        setNoteEditError(error.message || "The shared edit history is unavailable.");
+      },
+    );
+  }, [id, subscribeNoteEdits]);
+
+  useEffect(() => {
+    if (!id) return;
+    const pending = readPendingNoteEdits(id);
+    setPendingNoteEditCount(pending.length);
+    if (pending.length > 0) {
+      setNoteEditEvents((current) => mergeNoteEditEvents(current, pending));
+      void flushPendingNoteEdits(id);
+    }
+  }, [flushPendingNoteEdits, id]);
+
+  useEffect(() => {
+    if (
+      !detail
+      || detail.locked
+      || detail.status === "review"
+      || draftRevision === savedRevision
+      || saveState === "saving"
+    ) return undefined;
+
+    const revisionAtSchedule = draftRevision;
+    const timeout = window.setTimeout(() => {
+      void (async () => {
+        setSaveState("saving");
+        setSaveError("");
+        try {
+          await saveExperiment(detail.id, {
+            name: title,
+            objective,
+            notes,
+            observations: "",
+            status,
+            projectId: projectId || null,
+            notebook,
+            dueDate: dueDate || null,
+            tags: tagsDraft.split(","),
+          });
+          setSavedRevision(revisionAtSchedule);
+          setSaveState("saved");
+        } catch (error) {
+          setSaveError(error instanceof Error ? error.message : "Unable to save this experiment.");
+          setSaveState("idle");
+        }
+      })();
+    }, 900);
+
+    return () => window.clearTimeout(timeout);
+  }, [detail, draftRevision, dueDate, notebook, notes, objective, projectId, saveExperiment, savedRevision, saveState, status, tagsDraft, title]);
 
   const notebookStats = useMemo(
     () => ({
       objective: textStats(objective),
       notes: textStats(notes),
-      observations: textStats(observations),
     }),
-    [objective, notes, observations],
+    [objective, notes],
   );
 
   const eligibleReviewers = useMemo(
@@ -162,7 +273,11 @@ export function ExperimentEditor() {
     );
   }
 
-  const markDirty = () => setSaveState("idle");
+  const markDirty = () => {
+    setSaveState("idle");
+    setSaveError("");
+    setDraftRevision((revision) => revision + 1);
+  };
   const isLocked = !!detail.locked;
   const linkedProject = projectRecords.find((project) => project.id === detail.projectId);
   const projectAllowsCurrentUser =
@@ -206,7 +321,6 @@ export function ExperimentEditor() {
   const signingIssues = [
     !detail.objective.trim() ? "Objective is missing" : "",
     !detail.notes.trim() ? "Notebook notes are missing" : "",
-    !detail.observations.trim() ? "Observations are missing" : "",
     detail.attachmentIds.length === 0 ? "Raw files are not attached" : "",
     detail.reviewStatus !== "approved" ? "Independent review has not been approved" : "",
     detail.protocol.some((step) => step.status !== "done") ? "Protocol steps are incomplete" : "",
@@ -225,8 +339,19 @@ export function ExperimentEditor() {
   };
 
   const handleSign = async () => {
+    if (signingIssues.length > 0 || !canAuthorSignExperiment) {
+      setPanelTab("review");
+      setPanelOpen(true);
+      setSignatureError(
+        signingIssues.length > 0
+          ? `Complete these items before e-signing: ${signingIssues.join(" · ")}`
+          : "An assigned independent reviewer must approve this experiment before it can be signed.",
+      );
+      return;
+    }
     if (needsSignaturePassword && !signaturePassword) {
       setPanelTab("review");
+      setPanelOpen(true);
       setSignatureError("Enter your account password below to confirm this electronic signature.");
       return;
     }
@@ -240,6 +365,7 @@ export function ExperimentEditor() {
       setSignatureDraft("");
     } catch (err) {
       setPanelTab("review");
+      setPanelOpen(true);
       setSignatureError(err instanceof Error ? err.message : "Unable to create the electronic signature.");
     } finally {
       setIsSigning(false);
@@ -249,6 +375,7 @@ export function ExperimentEditor() {
   const handleReviewRequest = async () => {
     if (!reviewerUid) {
       setPanelTab("review");
+      setPanelOpen(true);
       setReviewError("Choose an active, independent owner, admin, or PI before requesting review.");
       return;
     }
@@ -259,6 +386,7 @@ export function ExperimentEditor() {
       await submitExperimentForReview(detail.id, reviewerUid, reviewDraft, reviewDueDate || null);
     } catch (err) {
       setPanelTab("review");
+      setPanelOpen(true);
       setReviewError(err instanceof Error ? err.message : "Unable to request independent review.");
     } finally {
       setReviewAction(null);
@@ -268,11 +396,13 @@ export function ExperimentEditor() {
   const handleReviewDecision = async (decision: "approved" | "rejected") => {
     if (decision === "rejected" && !reviewDraft.trim()) {
       setPanelTab("review");
+      setPanelOpen(true);
       setReviewError("A clear reason is required when requesting changes.");
       return;
     }
     if (needsSignaturePassword && !reviewPassword) {
       setPanelTab("review");
+      setPanelOpen(true);
       setReviewError("Enter your account password below to confirm this independent review decision.");
       return;
     }
@@ -289,6 +419,7 @@ export function ExperimentEditor() {
       setReviewPassword("");
     } catch (err) {
       setPanelTab("review");
+      setPanelOpen(true);
       setReviewError(err instanceof Error ? err.message : "Unable to record the independent review decision.");
     } finally {
       setReviewAction(null);
@@ -296,26 +427,57 @@ export function ExperimentEditor() {
   };
 
   const handleSave = async () => {
-    if (isReadOnly) return;
+    if (isReadOnly) {
+      setSaveError("This experiment is read-only and cannot be saved.");
+      return;
+    }
+    if (saveState === "saving") return;
+    const revisionAtSave = draftRevision;
     setSaveState("saving");
-    await saveExperiment(detail.id, {
-      name: title,
-      objective,
-      notes,
-      observations,
-      status,
-      projectId: projectId || null,
-      notebook,
-      dueDate: dueDate || null,
-      tags: tagsDraft.split(","),
+    setSaveError("");
+    try {
+      await saveExperiment(detail.id, {
+        name: title,
+        objective,
+        notes,
+        observations: "",
+        status,
+        projectId: projectId || null,
+        notebook,
+        dueDate: dueDate || null,
+        tags: tagsDraft.split(","),
+      });
+      setSavedRevision(revisionAtSave);
+      setSaveState("saved");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Unable to save this experiment.");
+      setSaveState("idle");
+    }
+  };
+
+  const applyNoteChange = (nextNotes: string) => {
+    const event = createNoteEditEvent(notes, nextNotes, {
+      experimentId: detail.id,
+      actorUid: activeMember?.uid ?? user?.uid ?? "unknown-user",
+      actorName: activeMember?.displayName ?? user?.name ?? "Unknown editor",
+      deviceId: deviceIdentity.deviceId,
+      deviceLabel: deviceIdentity.deviceLabel,
+      sessionId: deviceIdentity.sessionId,
     });
-    setSaveState("saved");
+    setNotes(nextNotes);
+    markDirty();
+    if (!event) return;
+    setNoteEditEvents((current) => mergeNoteEditEvents(current, [event]));
+    setNoteEditError("");
+    const pending = mergeNoteEditEvents(readPendingNoteEdits(detail.id), [event]);
+    writePendingNoteEdits(detail.id, pending);
+    setPendingNoteEditCount(pending.length);
+    void flushPendingNoteEdits(detail.id);
   };
 
   const insertNoteSnippet = (snippet: string) => {
     const separator = notes.trim() ? "\n\n" : "";
-    setNotes(`${notes}${separator}${snippet}`);
-    markDirty();
+    applyNoteChange(`${notes}${separator}${snippet}`);
   };
 
   const submitComment = async () => {
@@ -484,602 +646,276 @@ export function ExperimentEditor() {
 
   const experimentTasks = collaborationTasks.filter((task) => task.experimentId === detail.id);
 
+
+  const openPanel = (tab: PanelTab) => {
+    if (panelOpen && panelTab === tab) {
+      setPanelOpen(false);
+      return;
+    }
+    setPanelTab(tab);
+    setPanelOpen(true);
+  };
+
+  const totalWords = notebookStats.objective.words + notebookStats.notes.words;
+  const completedSteps = detail.protocol.filter((step) => step.status === "done").length;
+  const recentDeletions = noteEditEvents.filter((event) => event.deletedText).slice(-12).reverse();
+
   return (
-    <>
-      <div className="editor-topbar">
-        <div className="editor-breadcrumb">
-          <a onClick={() => navigate("/dashboard")}>Experiments</a>
-          <span>&gt;</span>
+    <div className="focus-editor-shell">
+      <header className="focus-editor-header">
+        <button className="focus-back-button" type="button" onClick={() => navigate("/dashboard")} aria-label="Back to experiments">
+          ←
+        </button>
+        <div className="focus-editor-identity">
           <span>{detail.project}</span>
-          <span>&gt;</span>
-          <span className="current">{detail.name}</span>
+          <strong>{detail.id}</strong>
         </div>
-        <div className="editor-topbar-actions">
+        <div className="focus-editor-state">
           <StatusBadge status={status} />
-          {isLocked && <span className="editor-lock-pill">Signed / Locked</span>}
-          {!isLocked && detail.status === "review" && <span className="editor-lock-pill muted">Review controls record changes</span>}
-          {!isLocked && !canEditExperiment && <span className="editor-lock-pill muted">Read Only</span>}
+          <span className={`focus-save-state ${saveState}`}>{saveState === "saving" ? "Saving…" : saveError ? "Save failed" : draftRevision === savedRevision ? "All changes saved" : "Unsaved changes"}</span>
+        </div>
+        <div className="focus-editor-actions">
           {canRequestReview && (
-            <button className="btn-secondary" disabled={!reviewerUid || reviewAction !== null} onClick={() => void handleReviewRequest()}>
-              {reviewAction === "request" ? "Requesting..." : "Submit for Review"}
+            <button className="focus-quiet-button" disabled={reviewAction !== null} onClick={() => void handleReviewRequest()}>
+              {reviewAction === "request" ? "Requesting…" : "Send to review"}
             </button>
           )}
           {canReviewExperiment && (
             <>
-              <button className="btn-secondary" disabled={reviewAction !== null} onClick={() => void handleReviewDecision("approved")}>
-                {reviewAction === "approve" ? "Approving..." : "Approve"}
-              </button>
-              <button className="btn-secondary" disabled={reviewAction !== null} onClick={() => void handleReviewDecision("rejected")}>
-                {reviewAction === "reject" ? "Rejecting..." : "Request Changes"}
-              </button>
+              <button className="focus-quiet-button" disabled={reviewAction !== null} onClick={() => void handleReviewDecision("approved")}>Approve</button>
+              <button className="focus-quiet-button" disabled={reviewAction !== null} onClick={() => void handleReviewDecision("rejected")}>Request changes</button>
             </>
           )}
           {!isLocked && detail.ownerUid === activeMember?.uid && (
-            <button className="btn-secondary" disabled={signingIssues.length > 0 || !canAuthorSignExperiment || isSigning} onClick={handleSign}>
-              {isSigning ? "Signing..." : "E-Sign"}
+            <button className="focus-quiet-button" disabled={isSigning} onClick={handleSign}>
+              {isSigning ? "Signing…" : "E-sign"}
             </button>
           )}
-          {isLocked && (
-            <button className="btn-secondary" onClick={startAmendment}>
-              Create Amendment
-            </button>
-          )}
-          <button className="btn-secondary" onClick={() => navigate(`/experiments/${detail.id}/report`)}>
-            Print Report
-          </button>
-          <button className="btn-save" disabled={isReadOnly} onClick={handleSave}>
-            {saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Save"}
+          {isLocked && <button className="focus-quiet-button" onClick={startAmendment}>Amend</button>}
+          <button className="focus-quiet-button" onClick={() => navigate(`/experiments/${detail.id}/report`)}>Report</button>
+          <button className="focus-save-button" disabled={isReadOnly || saveState === "saving"} onClick={handleSave}>
+            {saveState === "saving" ? "Saving" : "Save"}
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="editor-body">
-        <div className="editor-main">
+      {saveError && <div className="focus-save-error" role="alert">{saveError}</div>}
+
+      <main className="focus-canvas-wrap">
+        <article className="focus-paper">
+          <div className="focus-paper-meta">
+            <span>{notebook || "General Notebook"}</span>
+            <span>{totalWords} words</span>
+            <span>Edited {detail.modified}</span>
+          </div>
+
           <input
-            className="editor-title-input"
+            className="focus-title-input"
             value={title}
             disabled={isReadOnly}
+            aria-label="Experiment title"
             onChange={(e) => {
               setTitle(e.target.value);
               markDirty();
             }}
           />
 
-          <div className="editor-meta-row">
-            <div className="editor-meta-field">
-              <span className="editor-meta-field-label">Project</span>
-              <span className="editor-meta-field-value">{detail.project}</span>
-            </div>
-            <div className="editor-meta-field">
-              <span className="editor-meta-field-label">Modified</span>
-              <span className="editor-meta-field-value">{detail.modified}</span>
-            </div>
-            <div className="editor-meta-field">
-              <span className="editor-meta-field-label">ID</span>
-              <span className="editor-meta-field-value mono">{detail.id}</span>
-            </div>
-            <label className="editor-status-field">
-              <span>Status</span>
-              <select
-                value={status}
-                disabled={isReadOnly}
-                onChange={(e) => {
-                  setStatus(e.target.value as ExperimentStatus);
-                  markDirty();
-                }}
-              >
-                {status === "review" && <option value="review">Review (workflow controlled)</option>}
-                {status === "complete" && <option value="complete">Complete (signed)</option>}
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="editor-tags-field">
-              <span>Tags</span>
-              <input
-                value={tagsDraft}
-                disabled={isReadOnly}
-                onChange={(e) => {
-                  setTagsDraft(e.target.value);
-                  markDirty();
-                }}
-                placeholder="Comma separated"
-              />
-            </label>
-            <label className="editor-status-field">
-              <span>Project</span>
-              <select
-                value={projectId}
-                disabled={isReadOnly}
-                onChange={(e) => {
-                  setProjectId(e.target.value);
-                  markDirty();
-                }}
-              >
-                <option value="">Unlinked</option>
-                {projectRecords.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="editor-tags-field">
-              <span>Notebook</span>
-              <input
-                value={notebook}
-                disabled={isReadOnly}
-                onChange={(e) => {
-                  setNotebook(e.target.value);
-                  markDirty();
-                }}
-              />
-            </label>
-            <label className="editor-status-field">
-              <span>Due</span>
-              <input
-                type="date"
-                value={dueDate}
-                disabled={isReadOnly}
-                onChange={(e) => {
-                  setDueDate(e.target.value);
-                  markDirty();
-                }}
-              />
-            </label>
-          </div>
+          <label className="focus-writing-section focus-objective-section">
+            <span className="focus-section-label">Objective</span>
+            <textarea
+              value={objective}
+              disabled={isReadOnly}
+              rows={3}
+              placeholder="What are you trying to learn?"
+              onChange={(e) => {
+                setObjective(e.target.value);
+                markDirty();
+              }}
+            />
+          </label>
 
-          <div className="editor-toolbar">
-            <label className="editor-template-picker">
-              <span>Protocol</span>
-              <select
-                value={detail.protocolTemplateId ?? ""}
-                disabled={isReadOnly}
-                onChange={(e) => e.target.value && attachProtocolTemplate(detail.id, e.target.value)}
-              >
-                <option value="">Default checklist</option>
-                {protocolTemplates
-                  .filter((template) => template.status === "active" && template.steps.some((step) => step.trim()))
-                  .map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name} v{template.version}
-                    </option>
+          <section className="focus-writing-section focus-notes-section">
+            <div className="focus-notes-heading">
+              <span className="focus-section-label">Experiment notes</span>
+              {!isReadOnly && (
+                <div className="focus-snippets">
+                  {NOTE_SNIPPETS.map((snippet) => (
+                    <button key={snippet.label} type="button" onClick={() => insertNoteSnippet(snippet.value())}>{snippet.label}</button>
                   ))}
-              </select>
-            </label>
-            <label className="toolbar-ai-btn file-upload-btn">
-              {uploadState || "Upload File"}
-              <input type="file" disabled={isReadOnly} onChange={(e) => handleUpload(e.target.files?.[0])} />
-            </label>
-            <label className="toolbar-ai-btn file-upload-btn">
-              Inline Image
-              <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleInlineImageUpload(e.target.files?.[0])} />
-            </label>
-          </div>
-
-          <div className="editor-card notebook-card">
-            <div className="notebook-header">
-              <div>
-                <span className="notebook-kicker">Experiment Notebook</span>
-                <h3>Record Notes</h3>
-                <p>Capture the hypothesis, live run notes, and final interpretation in one review-ready notebook surface.</p>
-              </div>
-              <div className="notebook-summary">
-                <strong>{notebookStats.objective.words + notebookStats.notes.words + notebookStats.observations.words}</strong>
-                <span>Total words</span>
-              </div>
-            </div>
-
-            <div className="notebook-grid">
-              <section className="notebook-editor-pane">
-                <NotebookField
-                  label="Objective"
-                  eyebrow="Why this experiment exists"
-                  value={objective}
-                  disabled={isReadOnly}
-                  rows={4}
-                  stats={notebookStats.objective}
-                  placeholder="State the hypothesis, expected outcome, and success criteria..."
-                  onChange={(value) => {
-                    setObjective(value);
-                    markDirty();
-                  }}
-                />
-
-                <div className="notebook-field">
-                  <div className="notebook-field-header">
-                    <div>
-                      <span>Live notebook</span>
-                      <strong>Notebook Notes</strong>
-                    </div>
-                    <small>{notebookStats.notes.words} words / {notebookStats.notes.lines} lines</small>
-                  </div>
-                  {!isReadOnly && (
-                    <div className="notebook-snippet-row">
-                      {NOTE_SNIPPETS.map((snippet) => (
-                        <button key={snippet.label} type="button" className="notebook-chip" onClick={() => insertNoteSnippet(snippet.value())}>
-                          {snippet.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <textarea
-                    className="objective-textarea notebook-textarea large"
-                    value={notes}
-                    disabled={isReadOnly}
-                    onChange={(e) => {
-                      setNotes(e.target.value);
-                      markDirty();
-                    }}
-                    rows={9}
-                    placeholder="Methods, calculations, deviations, and running notes..."
-                  />
                 </div>
-
-                <NotebookField
-                  label="Observations"
-                  eyebrow="What happened and what it means"
-                  value={observations}
-                  disabled={isReadOnly}
-                  rows={5}
-                  stats={notebookStats.observations}
-                  placeholder="Results, anomalies, images reviewed, and interpretation..."
-                  onChange={(value) => {
-                    setObservations(value);
-                    markDirty();
-                  }}
-                />
-              </section>
-
-              <aside className="notebook-preview-pane">
-                <div className="notebook-preview-header">
-                  <span>Preview</span>
-                  <strong>{notebook || "General Notebook"}</strong>
-                </div>
-                <NotebookPreview title="Objective" value={objective} empty="No objective recorded yet." />
-                <NotebookPreview title="Notebook Notes" value={notes} empty="No running notes recorded yet." />
-                <NotebookPreview title="Observations" value={observations} empty="No observations recorded yet." />
-              </aside>
+              )}
             </div>
-
-            <h3>Structured Blocks</h3>
-            <div className="authoring-template-row">
-              {AUTHORING_TEMPLATES.map((template, index) => (
-                <button key={template.label} className="btn-secondary" type="button" disabled={isReadOnly} onClick={() => addTemplateBlock(index)}>
-                  {template.label}
-                </button>
-              ))}
-            </div>
-            <div className="authoring-block-list">
-              {detail.authoringBlocks.length === 0 && <p className="authoring-empty">No rich blocks yet.</p>}
-              {detail.authoringBlocks.map((block) => (
-                <div key={block.id} className="authoring-block">
-                  <div className="authoring-block-header">
-                    <div>
-                      <strong>{block.title}</strong>
-                      <span>{block.kind}{block.required ? " required" : ""}</span>
-                    </div>
-                    {!isReadOnly && (
-                      <div className="authoring-block-actions">
-                        <button className="btn-secondary" type="button" onClick={() => editAuthoringBlock(block)}>Edit</button>
-                        <button className="btn-secondary" type="button" onClick={() => deleteAuthoringBlock(block.id)}>Delete</button>
-                      </div>
-                    )}
-                  </div>
-                  {renderAuthoringBlock(block)}
+            <textarea
+              className="focus-notes-input"
+              value={notes}
+              disabled={isReadOnly}
+              rows={24}
+              placeholder="Start writing. Capture methods, calculations, results, deviations, and anything you notice…"
+              onChange={(e) => applyNoteChange(e.target.value)}
+            />
+            {recentDeletions.length > 0 && (
+              <aside className="focus-tracked-deletions" aria-label="Tracked deletions from experiment notes">
+                <div className="focus-tracked-deletions-header">
+                  <span>Tracked deletions</span>
+                  <small>Hover for editor, device, and time</small>
                 </div>
-              ))}
-            </div>
-            {!isReadOnly && (
-              <div className="authoring-builder">
-                <select value={blockKind} onChange={(e) => setBlockKind(e.target.value as AuthoringBlockKind)}>
-                  <option value="text">Text</option>
-                  <option value="table">Table / CSV</option>
-                  <option value="image">Image Note</option>
-                  <option value="equation">Equation</option>
-                  <option value="checklist">Checklist</option>
-                  <option value="data">Structured Data</option>
-                </select>
-                <input value={blockTitle} onChange={(e) => setBlockTitle(e.target.value)} placeholder="Block title" />
-                <label className="authoring-required-toggle">
-                  <input type="checkbox" checked={blockRequired} onChange={(e) => setBlockRequired(e.target.checked)} />
-                  Required before signing
-                </label>
-                <textarea value={blockContent} onChange={(e) => setBlockContent(e.target.value)} rows={3} placeholder="Paste table data, equation, checklist, or structured observations..." />
-                <div className="workbench-actions">
-                  <button className="btn-secondary" type="button" onClick={saveAuthoringBlock}>{editingBlockId ? "Save Block" : "Add Block"}</button>
-                  {editingBlockId && <button className="btn-secondary" type="button" onClick={resetBlockForm}>Cancel Edit</button>}
-                </div>
-              </div>
-            )}
-            <h3>Protocol Steps</h3>
-            <div className="protocol-steps">
-              {detail.protocol.map((step) => (
-                <div key={step.id} className={`protocol-step ${step.status}`}>
-                  <div className="protocol-step-check" onClick={() => toggleStep(step.id, step.status)}>
-                    {step.status === "done" && <CheckIcon />}
-                  </div>
-                  <span className="protocol-step-label" onClick={() => toggleStep(step.id, step.status)}>
-                    {step.label}
-                  </span>
-                  {lots.length > 0 && (
-                    <select
-                      className="step-lot-select"
-                      value={step.reagentLotId ?? ""}
-                      disabled={isReadOnly}
-                      onChange={(e) => linkProtocolStepLot(detail.id, step.id, e.target.value || null)}
+                <div className="focus-tracked-deletions-list">
+                  {recentDeletions.map((event) => (
+                    <del
+                      key={event.id}
+                      title={`${new Date(event.occurredAt).toLocaleString()} · ${event.actorName} · Device ${event.deviceId}`}
                     >
-                      <option value="">No lot linked</option>
-                      {lots.map((lot) => (
-                        <option key={lot.id} value={lot.id}>
-                          {lot.label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {step.status === "done" && (
-                    <span className="protocol-step-meta">
-                      {step.completedBy} {step.completedAt}
-                    </span>
-                  )}
-                  {step.status === "in_progress" && <span className="protocol-step-meta progress">In progress</span>}
-                  <div className="protocol-step-details">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={step.required !== false}
-                        disabled={isReadOnly}
-                        onChange={(e) => updateProtocolStepDetails(detail.id, step.id, { required: e.target.checked })}
-                      />
-                      Required
-                    </label>
-                    <label>
-                      Timer
-                      <input
-                        type="number"
-                        min={0}
-                        defaultValue={step.timerMinutes ?? 0}
-                        disabled={isReadOnly}
-                        onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { timerMinutes: Number(e.target.value) })}
-                      />
-                    </label>
-                    <input
-                      defaultValue={step.note ?? ""}
-                      disabled={isReadOnly}
-                      placeholder="Step note"
-                      onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { note: e.target.value })}
-                    />
-                    <input
-                      defaultValue={step.deviation ?? ""}
-                      disabled={isReadOnly}
-                      placeholder="Deviation"
-                      onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { deviation: e.target.value })}
-                    />
-                    {!isReadOnly && (
-                      <label className="step-file-upload">
-                        Step file
-                        <input type="file" onChange={(e) => handleUpload(e.target.files?.[0], step.id)} />
-                      </label>
-                    )}
-                  </div>
+                      {visibleEditText(event.deletedText)}
+                    </del>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="editor-side-panel">
-          <div className="side-panel-tabs">
-            {(["ai", "review", "comments", "tasks", "history", "files"] as PanelTab[]).map((tab) => (
-              <button
-                key={tab}
-                className={`side-panel-tab${panelTab === tab ? " active" : ""}`}
-                onClick={() => setPanelTab(tab)}
-              >
-                {tab === "ai"
-                  ? "AI"
-                  : tab === "review"
-                    ? "Review"
-                    : tab === "comments"
-                      ? `Comments (${detail.comments.length})`
-                      : tab === "tasks"
-                        ? `Tasks (${experimentTasks.length})`
-                        : tab === "files"
-                          ? `Files (${experimentAttachments.length})`
-                          : "History"}
-              </button>
-            ))}
-          </div>
-
-          <div className="side-panel-content">
-            {panelTab === "ai" &&
-              detail.aiInsights.map((insight) => (
-                <div key={insight.id} className={`insight-card ${insight.kind}`}>
-                  <div className="insight-card-title">{insight.title}</div>
-                  <p className="insight-card-body">{insight.body}</p>
-                </div>
-              ))}
-
-            {panelTab === "review" && (
-              <div className="review-panel">
-                <div className="review-row"><span>Status</span><strong>{detail.reviewStatus ?? "none"}</strong></div>
-                <div className="review-row"><span>Requested</span><strong>{detail.reviewRequestedBy || "Not requested"}</strong></div>
-                <div className="review-row"><span>Reviewer</span><strong>{detail.reviewAssignedToName || "Unassigned"}</strong></div>
-                <div className="review-row"><span>Due</span><strong>{detail.reviewDueDate || "No due date"}</strong></div>
-                {signingIssues.length > 0 && (
-                  <div className="signing-blocker-box">
-                    <strong>Signing Blockers</strong>
-                    {signingIssues.map((issue) => <span key={issue}>{issue}</span>)}
-                  </div>
-                )}
-                {canRequestReview && (
-                  <>
-                    <label className="review-control-label">
-                      <span>Independent reviewer</span>
-                      <select value={reviewerUid} onChange={(e) => setReviewerUid(e.target.value)}>
-                        <option value="">Choose an owner, admin, or PI</option>
-                        {eligibleReviewers.map((member) => (
-                          <option key={member.uid} value={member.uid}>{member.displayName} ({member.role})</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="review-control-label">
-                      <span>Review due date (optional)</span>
-                      <input type="date" value={reviewDueDate} onChange={(e) => setReviewDueDate(e.target.value)} />
-                    </label>
-                  </>
-                )}
-                <textarea
-                  value={reviewDraft}
-                  disabled={!canRequestReview && !canReviewExperiment}
-                  onChange={(e) => setReviewDraft(e.target.value)}
-                  placeholder={canReviewExperiment ? "Approval note or required changes..." : "Context for the independent reviewer..."}
-                  rows={4}
-                />
-                {canAuthorSignExperiment && (
-                  <textarea value={signatureDraft} onChange={(e) => setSignatureDraft(e.target.value)} placeholder="Signature meaning/comment..." rows={3} />
-                )}
-                {needsSignaturePassword && canReviewExperiment && (
-                  <input
-                    type="password"
-                    value={reviewPassword}
-                    disabled={reviewAction !== null}
-                    onChange={(e) => {
-                      setReviewPassword(e.target.value);
-                      setReviewError("");
-                    }}
-                    placeholder="Confirm account password to review"
-                    autoComplete="current-password"
-                  />
-                )}
-                {needsSignaturePassword && canAuthorSignExperiment && (
-                  <input
-                    type="password"
-                    value={signaturePassword}
-                    disabled={isLocked || !canAuthorSignExperiment || isSigning}
-                    onChange={(e) => {
-                      setSignaturePassword(e.target.value);
-                      setSignatureError("");
-                    }}
-                    placeholder="Confirm account password to e-sign"
-                    autoComplete="current-password"
-                  />
-                )}
-                <p>Only the assigned independent reviewer can approve or request changes. Electronic signatures require an approved review, fresh account confirmation, and lock the record after signing.</p>
-                {reviewError && <div className="signature-error" role="alert">{reviewError}</div>}
-                {signatureError && <div className="signature-error" role="alert">{signatureError}</div>}
-                {isLocked && <textarea value={amendmentDraft} onChange={(e) => setAmendmentDraft(e.target.value)} placeholder="Amendment reason..." rows={3} />}
-                <h3>Review History</h3>
-                {(detail.reviewEvents?.length ?? 0) === 0 && <p>No independent review events yet.</p>}
-                {[...(detail.reviewEvents ?? [])].reverse().map((event) => (
-                  <div key={event.id} className="history-entry">
-                    <div className="history-action">
-                      {event.actorName} - {event.kind === "requested" ? "requested review" : event.kind === "approved" ? "approved review" : "requested changes"}
-                    </div>
-                    <div className="history-meta">
-                      {new Date(event.occurredAt).toLocaleString()} {event.kind === "requested" ? `- assigned to ${event.reviewerName}` : ""}
-                    </div>
-                    {event.dueDate && event.kind === "requested" && <div className="history-summary">Due {event.dueDate}</div>}
-                    {event.comment && <div className="history-summary">{event.comment}</div>}
-                  </div>
-                ))}
-                <h3>Signatures</h3>
-                {detail.signatures.length === 0 && <p>No signatures yet.</p>}
-                {detail.signatures.map((signature) => (
-                  <div key={signature.id} className="history-entry">
-                    <div className="history-action">{signature.signerName} - {signature.meaning}</div>
-                    <div className="history-meta">{new Date(signature.signedAt).toLocaleString()}</div>
-                    {signature.manifestSha256 && <div className="history-summary mono">Evidence manifest SHA-256: {signature.manifestSha256}</div>}
-                  </div>
-                ))}
-                <h3>Versions</h3>
-                {detail.versions.length === 0 && <p>No version history yet.</p>}
-                {detail.versions.map((version) => (
-                  <div key={version.id} className="history-entry">
-                    <div className="history-action">
-                      v{version.versionNumber}.{version.revisionNumber ?? 0} - {version.label}
-                    </div>
-                    <div className="history-meta">
-                      {new Date(version.createdAt).toLocaleString()} by {version.createdBy} on {version.deviceLabel ?? "unknown device"}
-                    </div>
-                    <div className="history-summary">{version.snapshotSummary}</div>
-                    {(version.fieldChanges?.length ?? 0) > 0 && (
-                      <div className="revision-change-list">
-                        {version.fieldChanges?.map((change, index) => (
-                          <div key={`${version.id}-${change.field}-${index}`} className="revision-change">
-                            <strong>{change.field}</strong>
-                            <span>{change.before}</span>
-                            <span>{change.after}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+              </aside>
             )}
+          </section>
 
-            {panelTab === "comments" &&
-              detail.comments.map((c) => (
-                <div key={c.id} className="comment-card">
-                  <div className="comment-card-header">
-                    <div className="comment-avatar">{c.initials}</div>
-                    <span className="comment-author">{c.author}</span>
-                    <span className="comment-time">{c.postedAt}</span>
-                  </div>
-                  <p className="comment-body">{c.body}</p>
-                </div>
-              ))}
+          <div className="focus-paper-end"><span>End of current entry</span></div>
+        </article>
+      </main>
 
-            {panelTab === "tasks" &&
-              experimentTasks.map((task) => (
-                <div key={task.id} className="comment-card">
-                  <div className="comment-card-header">
-                    <span className="comment-author">{task.title}</span>
-                    <span className="comment-time">{task.status.replace("_", " ")}</span>
-                  </div>
-                  <p className="comment-body">{task.description || "No description."}</p>
-                </div>
-              ))}
+      <aside className={`floating-workspace${panelOpen ? " open" : ""}`} aria-label="Experiment tools">
+        <nav className="floating-tool-rail">
+          <button className={panelTab === "details" && panelOpen ? "active" : ""} onClick={() => openPanel("details")} title="Details" aria-label="Details">⌁</button>
+          <button className={panelTab === "protocol" && panelOpen ? "active" : ""} onClick={() => openPanel("protocol")} title="Protocol" aria-label="Protocol">✓<small>{completedSteps}/{detail.protocol.length}</small></button>
+          <button className={panelTab === "blocks" && panelOpen ? "active" : ""} onClick={() => openPanel("blocks")} title="Structured blocks" aria-label="Structured blocks">▤<small>{detail.authoringBlocks.length}</small></button>
+          <button className={panelTab === "ai" && panelOpen ? "active" : ""} onClick={() => openPanel("ai")} title="AI insights" aria-label="AI insights">✦<small>{detail.aiInsights.length}</small></button>
+          <button className={panelTab === "comments" && panelOpen ? "active" : ""} onClick={() => openPanel("comments")} title="Comments" aria-label="Comments">◌<small>{detail.comments.length}</small></button>
+          <button className={panelTab === "tasks" && panelOpen ? "active" : ""} onClick={() => openPanel("tasks")} title="Tasks" aria-label="Tasks">◇<small>{experimentTasks.length}</small></button>
+          <button className={panelTab === "files" && panelOpen ? "active" : ""} onClick={() => openPanel("files")} title="Files" aria-label="Files">↥<small>{experimentAttachments.length}</small></button>
+          <button className={panelTab === "review" && panelOpen ? "active" : ""} onClick={() => openPanel("review")} title="Review and signatures" aria-label="Review and signatures">⌾</button>
+          <button className={panelTab === "history" && panelOpen ? "active" : ""} onClick={() => openPanel("history")} title="History" aria-label="History">↺<small>{noteEditEvents.length}</small></button>
+        </nav>
 
-            {panelTab === "history" &&
-              detail.history.map((h) => (
-                <div key={h.id} className="history-entry">
-                  <div className="history-action">
-                    {h.actor} - {h.action}
-                  </div>
-                  <div className="history-meta">
-                    {h.timestamp}
-                    {h.deviceLabel ? ` - ${h.deviceLabel}` : ""}
-                  </div>
-                </div>
-              ))}
-
-            {panelTab === "files" &&
-              experimentAttachments.map((file) => (
-                <SecureAttachmentDownloadButton key={file.id} attachment={file} className="attachment-row" />
-              ))}
-          </div>
-
-          {panelTab === "comments" && (
-            <div className="side-panel-footer">
-              <input
-                className="comment-input"
-                placeholder="Add a comment..."
-                value={commentDraft}
-                onChange={(e) => setCommentDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submitComment();
-                }}
-              />
+        {panelOpen && (
+          <section className="floating-panel">
+            <div className="floating-panel-header">
+              <div>
+                <span>Experiment workspace</span>
+                <h2>{panelTab === "ai" ? "AI insights" : panelTab === "blocks" ? "Structured blocks" : panelTab[0].toUpperCase() + panelTab.slice(1)}</h2>
+              </div>
+              <button type="button" onClick={() => setPanelOpen(false)} aria-label="Close panel">×</button>
             </div>
-          )}
-        </div>
-      </div>
-    </>
+            <div className="floating-panel-content">
+              {panelTab === "details" && (
+                <div className="focus-details-form">
+                  <label><span>Status</span><select value={status} disabled={isReadOnly} onChange={(e) => { setStatus(e.target.value as ExperimentStatus); markDirty(); }}>{status === "review" && <option value="review">Review</option>}{status === "complete" && <option value="complete">Complete</option>}{STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                  <label><span>Project</span><select value={projectId} disabled={isReadOnly} onChange={(e) => { setProjectId(e.target.value); markDirty(); }}><option value="">Unlinked</option>{projectRecords.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+                  <label><span>Notebook</span><input value={notebook} disabled={isReadOnly} onChange={(e) => { setNotebook(e.target.value); markDirty(); }} /></label>
+                  <label><span>Due date</span><input type="date" value={dueDate} disabled={isReadOnly} onChange={(e) => { setDueDate(e.target.value); markDirty(); }} /></label>
+                  <label><span>Tags</span><input value={tagsDraft} disabled={isReadOnly} onChange={(e) => { setTagsDraft(e.target.value); markDirty(); }} placeholder="Comma separated" /></label>
+                  <label><span>Protocol template</span><select value={detail.protocolTemplateId ?? ""} disabled={isReadOnly} onChange={(e) => e.target.value && attachProtocolTemplate(detail.id, e.target.value)}><option value="">Default checklist</option>{protocolTemplates.filter((template) => template.status === "active" && template.steps.some((step) => step.trim())).map((template) => <option key={template.id} value={template.id}>{template.name} v{template.version}</option>)}</select></label>
+                  <div className="focus-upload-row">
+                    <label>{uploadState || "Upload file"}<input type="file" disabled={isReadOnly} onChange={(e) => handleUpload(e.target.files?.[0])} /></label>
+                    <label>Inline image<input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleInlineImageUpload(e.target.files?.[0])} /></label>
+                  </div>
+                  {(isLocked || !canEditExperiment) && <p className="focus-readonly-note">{isLocked ? "This signed experiment is locked." : "You have read-only access to this experiment."}</p>}
+                </div>
+              )}
+
+              {panelTab === "protocol" && (
+                <div className="focus-protocol-list">
+                  <p className="focus-panel-intro">Click a step to move it from pending to in progress to done.</p>
+                  {detail.protocol.map((step) => (
+                    <details key={step.id} className={`focus-protocol-step ${step.status}`}>
+                      <summary>
+                        <button type="button" disabled={isReadOnly} onClick={(e) => { e.preventDefault(); void toggleStep(step.id, step.status); }}>{step.status === "done" ? <CheckIcon /> : <span />}</button>
+                        <strong>{step.label}</strong>
+                        <em>{step.status.replace("_", " ")}</em>
+                      </summary>
+                      <div className="focus-step-controls">
+                        {lots.length > 0 && <label><span>Reagent lot</span><select value={step.reagentLotId ?? ""} disabled={isReadOnly} onChange={(e) => linkProtocolStepLot(detail.id, step.id, e.target.value || null)}><option value="">No lot linked</option>{lots.map((lot) => <option key={lot.id} value={lot.id}>{lot.label}</option>)}</select></label>}
+                        <label><span>Timer (min)</span><input type="number" min={0} defaultValue={step.timerMinutes ?? 0} disabled={isReadOnly} onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { timerMinutes: Number(e.target.value) })} /></label>
+                        <label><span>Step note</span><textarea defaultValue={step.note ?? ""} disabled={isReadOnly} onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { note: e.target.value })} /></label>
+                        <label><span>Deviation</span><textarea defaultValue={step.deviation ?? ""} disabled={isReadOnly} onBlur={(e) => updateProtocolStepDetails(detail.id, step.id, { deviation: e.target.value })} /></label>
+                        {!isReadOnly && <label className="focus-file-control">Attach step file<input type="file" onChange={(e) => handleUpload(e.target.files?.[0], step.id)} /></label>}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )}
+
+              {panelTab === "blocks" && (
+                <div className="focus-blocks-panel">
+                  <p className="focus-panel-intro">Add structured evidence without crowding your writing surface.</p>
+                  <div className="focus-template-grid">{AUTHORING_TEMPLATES.map((template, index) => <button key={template.label} type="button" disabled={isReadOnly} onClick={() => addTemplateBlock(index)}>{template.label}</button>)}</div>
+                  {detail.authoringBlocks.length === 0 && <p className="authoring-empty">No structured blocks yet.</p>}
+                  {detail.authoringBlocks.map((block) => (
+                    <div key={block.id} className="authoring-block">
+                      <div className="authoring-block-header"><div><strong>{block.title}</strong><span>{block.kind}{block.required ? " · required" : ""}</span></div>{!isReadOnly && <div className="authoring-block-actions"><button type="button" onClick={() => editAuthoringBlock(block)}>Edit</button><button type="button" onClick={() => deleteAuthoringBlock(block.id)}>Delete</button></div>}</div>
+                      {renderAuthoringBlock(block)}
+                    </div>
+                  ))}
+                  {!isReadOnly && <div className="authoring-builder"><select value={blockKind} onChange={(e) => setBlockKind(e.target.value as AuthoringBlockKind)}><option value="text">Text</option><option value="table">Table / CSV</option><option value="image">Image note</option><option value="equation">Equation</option><option value="checklist">Checklist</option><option value="data">Structured data</option></select><input value={blockTitle} onChange={(e) => setBlockTitle(e.target.value)} placeholder="Block title" /><label className="authoring-required-toggle"><input type="checkbox" checked={blockRequired} onChange={(e) => setBlockRequired(e.target.checked)} />Required before signing</label><textarea value={blockContent} onChange={(e) => setBlockContent(e.target.value)} rows={5} placeholder="Add block content…" /><div className="workbench-actions"><button type="button" onClick={saveAuthoringBlock}>{editingBlockId ? "Save block" : "Add block"}</button>{editingBlockId && <button type="button" onClick={resetBlockForm}>Cancel</button>}</div></div>}
+                </div>
+              )}
+
+              {panelTab === "ai" && detail.aiInsights.map((insight) => <div key={insight.id} className={`insight-card ${insight.kind}`}><div className="insight-card-title">{insight.title}</div><p className="insight-card-body">{insight.body}</p></div>)}
+
+              {panelTab === "comments" && <>{detail.comments.map((comment) => <div key={comment.id} className="comment-card"><div className="comment-card-header"><div className="comment-avatar">{comment.initials}</div><span className="comment-author">{comment.author}</span><span className="comment-time">{comment.postedAt}</span></div><p className="comment-body">{comment.body}</p></div>)}<div className="focus-comment-composer"><input placeholder="Add a comment…" value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void submitComment(); }} /><button type="button" onClick={() => void submitComment()}>Send</button></div></>}
+
+              {panelTab === "tasks" && <>{experimentTasks.length === 0 && <p className="focus-panel-intro">No tasks attached to this experiment.</p>}{experimentTasks.map((task) => <div key={task.id} className="comment-card"><div className="comment-card-header"><span className="comment-author">{task.title}</span><span className="comment-time">{task.status.replace("_", " ")}</span></div><p className="comment-body">{task.description || "No description."}</p></div>)}</>}
+
+              {panelTab === "files" && <>{experimentAttachments.length === 0 && <p className="focus-panel-intro">No files attached yet.</p>}{experimentAttachments.map((file) => <SecureAttachmentDownloadButton key={file.id} attachment={file} className="attachment-row" />)}</>}
+
+              {panelTab === "history" && (
+                <div className="note-history-panel">
+                  <div className="note-history-heading">
+                    <div><span>Experiment notes</span><strong>Keystroke history</strong></div>
+                    <small>{noteEditEvents.length} changes</small>
+                  </div>
+                  <p className="focus-panel-intro">Hover over any change to see its exact timestamp, editor, and device ID.</p>
+                  {(noteEditError || pendingNoteEditCount > 0) && <div className="note-history-sync-error" role="alert">{pendingNoteEditCount > 0 ? `${pendingNoteEditCount} edit${pendingNoteEditCount === 1 ? " is" : "s are"} safely queued and waiting to sync.` : ""}{noteEditError ? ` ${noteEditError}` : ""}</div>}
+                  {noteEditEvents.length === 0 && <p className="note-history-empty">No note edits recorded yet. Start typing in Experiment Notes.</p>}
+                  <div className="note-edit-list">
+                    {[...noteEditEvents].reverse().map((event) => {
+                      const tooltip = `${new Date(event.occurredAt).toLocaleString()} · ${event.actorName} · Device ${event.deviceId}`;
+                      return (
+                        <div key={event.id} className={`note-edit-entry ${event.kind}`} title={tooltip}>
+                          <div className="note-edit-meta">
+                            <strong>{event.actorName}</strong>
+                            <span>{new Date(event.occurredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>
+                          </div>
+                          <div className="note-edit-change">
+                            {event.deletedText && <del>{visibleEditText(event.deletedText)}</del>}
+                            {event.addedText && <ins>{visibleEditText(event.addedText)}</ins>}
+                          </div>
+                          <small>Position {event.position + 1} · {event.deviceLabel}</small>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {detail.history.length > 0 && <div className="note-history-heading record-history"><div><span>Experiment record</span><strong>Workflow history</strong></div></div>}
+                  {detail.history.map((entry) => <div key={entry.id} className="history-entry"><div className="history-action">{entry.actor} — {entry.action}</div><div className="history-meta">{entry.timestamp}{entry.deviceLabel ? ` · ${entry.deviceLabel}` : ""}</div></div>)}
+                </div>
+              )}
+
+              {panelTab === "review" && (
+                <div className="review-panel">
+                  <div className="review-row"><span>Status</span><strong>{detail.reviewStatus ?? "none"}</strong></div>
+                  <div className="review-row"><span>Reviewer</span><strong>{detail.reviewAssignedToName || "Unassigned"}</strong></div>
+                  <div className="review-row"><span>Due</span><strong>{detail.reviewDueDate || "No due date"}</strong></div>
+                  {signingIssues.length > 0 && <div className="signing-blocker-box"><strong>Before signing</strong>{signingIssues.map((issue) => <span key={issue}>{issue}</span>)}</div>}
+                  {canRequestReview && <><label className="review-control-label"><span>Independent reviewer</span><select value={reviewerUid} onChange={(e) => { setReviewerUid(e.target.value); setReviewError(""); }}><option value="">Choose reviewer</option>{eligibleReviewers.map((member) => <option key={member.uid} value={member.uid}>{member.displayName} ({member.role})</option>)}</select></label>{eligibleReviewers.length === 0 && <div className="signature-error">Add another active owner, admin, or PI to the lab before requesting independent review.</div>}<label className="review-control-label"><span>Review due date</span><input type="date" value={reviewDueDate} onChange={(e) => setReviewDueDate(e.target.value)} /></label><button className="focus-review-action" type="button" disabled={reviewAction !== null} onClick={() => void handleReviewRequest()}>{reviewAction === "request" ? "Requesting…" : "Send to independent review"}</button></>}
+                  <textarea value={reviewDraft} disabled={!canRequestReview && !canReviewExperiment} onChange={(e) => setReviewDraft(e.target.value)} placeholder={canReviewExperiment ? "Approval note or required changes…" : "Context for the reviewer…"} rows={4} />
+                  {canAuthorSignExperiment && <textarea value={signatureDraft} onChange={(e) => setSignatureDraft(e.target.value)} placeholder="Signature meaning/comment…" rows={3} />}
+                  {needsSignaturePassword && canReviewExperiment && <input type="password" value={reviewPassword} disabled={reviewAction !== null} onChange={(e) => { setReviewPassword(e.target.value); setReviewError(""); }} placeholder="Confirm password to review" autoComplete="current-password" />}
+                  {needsSignaturePassword && canAuthorSignExperiment && <input type="password" value={signaturePassword} disabled={isLocked || isSigning} onChange={(e) => { setSignaturePassword(e.target.value); setSignatureError(""); }} placeholder="Confirm password to e-sign" autoComplete="current-password" />}
+                  {!isLocked && detail.ownerUid === activeMember?.uid && <button className="focus-review-action" type="button" disabled={isSigning} onClick={handleSign}>{isSigning ? "Signing…" : "E-sign experiment"}</button>}
+                  {reviewError && <div className="signature-error" role="alert">{reviewError}</div>}{signatureError && <div className="signature-error" role="alert">{signatureError}</div>}
+                  {isLocked && <textarea value={amendmentDraft} onChange={(e) => setAmendmentDraft(e.target.value)} placeholder="Amendment reason…" rows={3} />}
+                  <h3>Review history</h3>{(detail.reviewEvents?.length ?? 0) === 0 && <p>No review events yet.</p>}{[...(detail.reviewEvents ?? [])].reverse().map((event) => <div key={event.id} className="history-entry"><div className="history-action">{event.actorName} — {event.kind}</div><div className="history-meta">{new Date(event.occurredAt).toLocaleString()}</div>{event.comment && <div className="history-summary">{event.comment}</div>}</div>)}
+                  <h3>Signatures</h3>{detail.signatures.length === 0 && <p>No signatures yet.</p>}{detail.signatures.map((signature) => <div key={signature.id} className="history-entry"><div className="history-action">{signature.signerName} — {signature.meaning}</div><div className="history-meta">{new Date(signature.signedAt).toLocaleString()}</div></div>)}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+      </aside>
+    </div>
   );
 }
 
@@ -1094,60 +930,69 @@ function textStats(value: string): TextStats {
   return { words, lines };
 }
 
-function NotebookField({
-  label,
-  eyebrow,
-  value,
-  disabled,
-  rows,
-  stats,
-  placeholder,
-  onChange,
-}: {
-  label: string;
-  eyebrow: string;
-  value: string;
-  disabled: boolean;
-  rows: number;
-  stats: TextStats;
-  placeholder: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="notebook-field">
-      <div className="notebook-field-header">
-        <div>
-          <span>{eyebrow}</span>
-          <strong>{label}</strong>
-        </div>
-        <small>{stats.words} words / {stats.lines} lines</small>
-      </div>
-      <textarea
-        className="objective-textarea notebook-textarea"
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        rows={rows}
-        placeholder={placeholder}
-      />
-    </label>
-  );
+function createNoteEditEvent(
+  previous: string,
+  next: string,
+  metadata: Omit<NoteEditEvent, "id" | "kind" | "position" | "addedText" | "deletedText" | "occurredAt">,
+): NoteEditEvent | null {
+  if (previous === next) return null;
+  let prefixLength = 0;
+  const shortestLength = Math.min(previous.length, next.length);
+  while (prefixLength < shortestLength && previous[prefixLength] === next[prefixLength]) prefixLength += 1;
+
+  let suffixLength = 0;
+  while (
+    suffixLength < previous.length - prefixLength
+    && suffixLength < next.length - prefixLength
+    && previous[previous.length - 1 - suffixLength] === next[next.length - 1 - suffixLength]
+  ) suffixLength += 1;
+
+  const deletedText = previous.slice(prefixLength, previous.length - suffixLength);
+  const addedText = next.slice(prefixLength, next.length - suffixLength);
+  const occurredAt = new Date().toISOString();
+  return {
+    ...metadata,
+    id: `note-edit-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    kind: deletedText && addedText ? "replace" : deletedText ? "delete" : "insert",
+    position: prefixLength,
+    addedText,
+    deletedText,
+    occurredAt,
+  };
 }
 
-function NotebookPreview({ title, value, empty }: { title: string; value: string; empty: string }) {
-  const paragraphs = value
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
+function visibleEditText(value: string) {
+  return value.replace(/\n/g, "↵").replace(/ /g, "␠");
+}
 
-  return (
-    <section className="notebook-preview-section">
-      <h4>{title}</h4>
-      {paragraphs.length === 0 ? (
-        <p className="notebook-preview-empty">{empty}</p>
-      ) : (
-        paragraphs.map((paragraph, index) => <p key={`${title}-${index}`}>{paragraph}</p>)
-      )}
-    </section>
-  );
+function noteEditQueueKey(experimentId: string) {
+  return `${NOTE_EDIT_QUEUE_PREFIX}${experimentId}`;
+}
+
+function readPendingNoteEdits(experimentId: string): NoteEditEvent[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(noteEditQueueKey(experimentId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed as NoteEditEvent[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingNoteEdits(experimentId: string, events: NoteEditEvent[]) {
+  if (typeof window === "undefined") return;
+  try {
+    const key = noteEditQueueKey(experimentId);
+    if (events.length === 0) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, JSON.stringify(events));
+  } catch {
+    // Keep the in-memory history visible if browser storage is unavailable.
+  }
+}
+
+function mergeNoteEditEvents(current: NoteEditEvent[], incoming: NoteEditEvent[]) {
+  const merged = new Map(current.map((event) => [event.id, event]));
+  incoming.forEach((event) => merged.set(event.id, event));
+  return [...merged.values()].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
 }

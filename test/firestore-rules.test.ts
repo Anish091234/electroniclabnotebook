@@ -88,6 +88,23 @@ function experiment(ownerUid: string, id = "EXP-1") {
   };
 }
 
+function noteEdit(actorUid: string, actorName: string, id = "edit-1") {
+  return {
+    id,
+    experimentId: "EXP-1",
+    kind: "insert",
+    position: 11,
+    addedText: "A",
+    deletedText: "",
+    occurredAt: "2026-07-17T12:00:00.000Z",
+    actorUid,
+    actorName,
+    deviceId: "device-test",
+    deviceLabel: "Test browser on Test OS",
+    sessionId: "session-test",
+  };
+}
+
 function sampleRecord(ownerUid: string, id = "sample-1") {
   return {
     id,
@@ -170,6 +187,33 @@ describe("Firestore authorization", () => {
 
     await assertSucceeds(setDoc(reference, experiment("researcher")));
     await assertSucceeds(setDoc(reference, { ...experiment("researcher"), objective: "Updated objective" }));
+  });
+
+  it("keeps experiment note edits append-only and tied to the authenticated editor", async () => {
+    await seedLab([
+      { uid: "researcher", role: "researcher" },
+      { uid: "other", role: "researcher" },
+      { uid: "viewer", role: "viewer" },
+    ]);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "labs", LAB_ID, "experiments", "EXP-1"), experiment("researcher"));
+    });
+
+    const researcherDb = testEnv.authenticatedContext("researcher").firestore();
+    const editReference = doc(researcherDb, "labs", LAB_ID, "experiments", "EXP-1", "noteEdits", "edit-1");
+    await assertSucceeds(setDoc(editReference, noteEdit("researcher", "researcher")));
+    await assertSucceeds(getDoc(editReference));
+    await assertFails(setDoc(editReference, { ...noteEdit("researcher", "researcher"), addedText: "B" }));
+
+    const spoofedReference = doc(researcherDb, "labs", LAB_ID, "experiments", "EXP-1", "noteEdits", "edit-spoofed");
+    await assertFails(setDoc(spoofedReference, noteEdit("researcher", "Someone Else", "edit-spoofed")));
+
+    const otherDb = testEnv.authenticatedContext("other").firestore();
+    await assertFails(setDoc(doc(otherDb, "labs", LAB_ID, "experiments", "EXP-1", "noteEdits", "edit-other"), noteEdit("other", "other", "edit-other")));
+
+    const viewerDb = testEnv.authenticatedContext("viewer").firestore();
+    await assertFails(setDoc(doc(viewerDb, "labs", LAB_ID, "experiments", "EXP-1", "noteEdits", "edit-viewer"), noteEdit("viewer", "viewer", "edit-viewer")));
+    await assertSucceeds(getDoc(doc(viewerDb, "labs", LAB_ID, "experiments", "EXP-1", "noteEdits", "edit-1")));
   });
 
   it("requires a clean server-owned review state and at least one protocol step on creation", async () => {

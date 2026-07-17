@@ -143,6 +143,21 @@ export interface ReviewEvent {
   occurredAt: string;
 }
 
+export interface NoteEditEvent {
+  id: string;
+  experimentId: string;
+  kind: "insert" | "delete" | "replace";
+  position: number;
+  addedText: string;
+  deletedText: string;
+  occurredAt: string;
+  actorUid: string;
+  actorName: string;
+  deviceId: string;
+  deviceLabel: string;
+  sessionId: string;
+}
+
 export interface ExperimentDetail extends Experiment {
   objective: string;
   notes: string;

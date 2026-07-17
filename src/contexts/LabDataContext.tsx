@@ -35,6 +35,7 @@ import type {
   InventoryItem,
   InventoryLot,
   NotificationRecord,
+  NoteEditEvent,
   ProtocolStep,
   ProtocolTemplate,
   ProjectRecord,
@@ -67,6 +68,12 @@ interface LabDataState {
 interface LabDataContextValue extends LabDataState {
   createExperiment: (input: CreateExperimentInput) => Promise<Experiment>;
   saveExperiment: (id: string, input: SaveExperimentInput) => Promise<void>;
+  recordNoteEdit: (experimentId: string, event: NoteEditEvent) => Promise<void>;
+  subscribeNoteEdits: (
+    experimentId: string,
+    onEvents: (events: NoteEditEvent[]) => void,
+    onError?: (error: Error) => void,
+  ) => () => void;
   attachProtocolTemplate: (experimentId: string, templateId: string) => Promise<void>;
   updateProtocolStepStatus: (experimentId: string, stepId: string, status: ProtocolStep["status"]) => Promise<void>;
   linkProtocolStepLot: (experimentId: string, stepId: string, lotId: string | null) => Promise<void>;
@@ -711,6 +718,21 @@ export function LabDataProvider({ children }: { children: ReactNode }) {
           fieldChanges,
           versionNumber: changePatch.revision.revisionNumber,
         });
+      },
+      recordNoteEdit: async (experimentId, event) => {
+        if (!labId) throw new Error("No active lab");
+        const detail = state.experimentDetails[experimentId];
+        if (!detail) throw new Error("Experiment not found");
+        if (detail.locked) throw new Error("Signed experiments are locked. Create an amendment before editing.");
+        await setDoc(doc(docFor(labId, "experiments", experimentId), "noteEdits", event.id), event);
+      },
+      subscribeNoteEdits: (experimentId, onEvents, onError) => {
+        if (!labId) return () => undefined;
+        return onSnapshot(
+          query(collection(docFor(labId, "experiments", experimentId), "noteEdits"), orderBy("occurredAt", "asc")),
+          (snapshot) => onEvents(snapshot.docs.map((item) => item.data() as NoteEditEvent)),
+          (error) => onError?.(error),
+        );
       },
       attachProtocolTemplate: async (experimentId, templateId) => {
         if (!labId) throw new Error("No active lab");
